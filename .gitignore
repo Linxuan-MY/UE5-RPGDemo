@@ -1,0 +1,62 @@
+# Unreal Engine generated directories
+/Binaries/
+/DerivedDataCache/
+/Intermediate/
+/Saved/
+
+# Generated plugin build output
+/Plugins/*/Binaries/
+/Plugins/*/DerivedDataCache/
+/Plugins/*/Intermediate/
+/Plugins/*/Saved/
+
+# Local build and cache output
+/Build/Receipts/
+/Build/*/FileOpenOrder/
+/AssetRegistryCache/
+/LocalBuilds/
+
+# Unreal generated project files
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.VC.opendb
+*.xcodeproj
+*.xcworkspace
+*.xcuserstate
+
+# IDE and editor state
+.vs/
+.vscode/.browse.VC.db*
+.vscode/ipch/
+.idea/
+*.code-workspace
+*.DotSettings.user
+
+# Visual Studio and compiler output that may appear outside Intermediate
+*.ilk
+*.ipdb
+*.iobj
+*.pdb
+*.pch
+*.rsp
+*.tlog
+*.lastbuildstate
+*.log
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Personal Unreal content
+/Content/Developers/
+
+# Do not commit packaged builds unless intentionally versioning a release
+/Package/
+/Packages/
+/Releases/
