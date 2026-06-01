@@ -5,10 +5,8 @@
 #include "AbilitySystem/Abilities/RPGDemoGameplayAbility.h"
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 
-bool FRPGDemoHeroAbilitySet::IsValid() const
-{
-	return InputTag.IsValid() && AbilityToGrant;
-}
+
+
 
 void UDataAsset_HeroStartUpData::GiveToAbilitySystemComponent(URPGDemoAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
 {
