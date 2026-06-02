@@ -2,7 +2,7 @@
 
 
 #include "RPGDemoTypes/RPGDemoStructTypes.h"
-#include "AbilitySystem/Abilities/RPGDemoGameplayAbility.h"
+#include "AbilitySystem/Abilities/RPGDemoHeroGameplayAbility.h"
 
 bool FRPGDemoHeroAbilitySet::IsValid() const
 {

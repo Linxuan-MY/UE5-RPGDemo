@@ -25,4 +25,8 @@ namespace RPGDemoGameplayTags
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Player_Event_Equip_Axe);
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Player_Event_UnEquip_Axe);
 
+	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Player_Status_JumpToFinisher);
+
+
+
 }
