@@ -8,6 +8,7 @@
 
 class URPGDemoGameplayAbility;
 class URPGDemoAbilitySystemComponent;
+class UGameplayEffect;
 
 /**
  * 
@@ -26,6 +27,9 @@ protected:
 	
 	UPROPERTY(EditDefaultsOnly, Category = "StartUpData")
 	TArray < TSubclassOf < URPGDemoGameplayAbility > > ReactiveAbilities;
+
+	UPROPERTY(EditDefaultsOnly, Category = "StartUpData")
+	TArray< TSubclassOf<UGameplayEffect> > StartUpGameplayEffects;
 
 	void GrantAbilities(const TArray<TSubclassOf<URPGDemoGameplayAbility>>& InAbilitiesToGive, URPGDemoAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1);
 };

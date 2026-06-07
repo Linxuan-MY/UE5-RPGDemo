@@ -4,7 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "AttributeSet.h"
+#include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 #include "RPGDemoAttributeSet.generated.h"
+
+#define ATTRIBUTE_ACCESSORS(ClassName, PropertyName) \
+GAMEPLAYATTRIBUTE_PROPERTY_GETTER(ClassName, PropertyName) \
+GAMEPLAYATTRIBUTE_VALUE_GETTER(PropertyName) \
+GAMEPLAYATTRIBUTE_VALUE_SETTER(PropertyName) \
+GAMEPLAYATTRIBUTE_VALUE_INITTER(PropertyName)
 
 /**
  * 
@@ -13,5 +20,32 @@ UCLASS()
 class RPGDEMO_API URPGDemoAttributeSet : public UAttributeSet
 {
 	GENERATED_BODY()
-	
+
+public:
+	URPGDemoAttributeSet();
+
+	UPROPERTY(BlueprintReadOnly, Category = "Health")
+	FGameplayAttributeData CurrentHealth;
+	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, CurrentHealth)
+
+	UPROPERTY(BlueprintReadOnly, Category = "Health")
+	FGameplayAttributeData MaxHealth;
+	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, MaxHealth)
+
+	UPROPERTY(BlueprintReadOnly, Category = "Rage")
+	FGameplayAttributeData CurrentRage;
+	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, CurrentRage)
+
+	UPROPERTY(BlueprintReadOnly, Category = "Rage")
+	FGameplayAttributeData MaxRage;
+	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, MaxRage)
+
+	UPROPERTY(BlueprintReadOnly, Category = "Damage")
+	FGameplayAttributeData AttackPower;
+	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, AttackPower)
+
+	UPROPERTY(BlueprintReadOnly, Category = "Damage")
+	FGameplayAttributeData DefensePower;
+	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, DefensePower)
+
 };
