@@ -23,6 +23,10 @@ class RPGDEMO_API ARPGDemoHeroCharacter : public ARPGDemoBaseCharacter
 public:
 	ARPGDemoHeroCharacter();
 
+	//~ Begin PawnCombatInterface interface
+	virtual UPawnCombatComponent* GetPawnCombatComponent() const override;
+	//~ End PawnCombatInterface interface
+
 protected:
 	//~ Begin APawn interface
 	virtual void PossessedBy(AController* NewController) override;

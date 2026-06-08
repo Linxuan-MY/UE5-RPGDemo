@@ -3,6 +3,7 @@
 
 #include "Components/Combat/PawnCombatComponent.h"
 #include "Items/Weapons/RPGDemoWeaponBase.h"
+#include "Components/BoxComponent.h"
 
 #include "RPGDemoDebugHelper.h"
 
@@ -44,4 +45,26 @@ ARPGDemoWeaponBase* UPawnCombatComponent::GetCharacterCurrentlyEquippedWeapon() 
 	}
 
 	return GetCharacterCarriedWeaponByTag(CurrentlyEquippedWeaponTag);
+}
+
+void UPawnCombatComponent::ToggleWeaponCollision(bool bShouldEnable, EToggleDamageType ToggleDamageType)
+{
+	if (ToggleDamageType == EToggleDamageType::CurrentEquippedWeapon)
+	{
+		ARPGDemoWeaponBase* WeaponToToggle = GetCharacterCurrentlyEquippedWeapon();
+
+		check(WeaponToToggle);
+
+		if (bShouldEnable)
+		{
+			WeaponToToggle->GetWeaponCollisionBox()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+			
+		}
+		else {
+			WeaponToToggle->GetWeaponCollisionBox()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			
+		}
+	}
+
+	//TODO: Handle body collision box
 }

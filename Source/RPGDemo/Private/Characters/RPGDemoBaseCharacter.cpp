@@ -24,6 +24,11 @@ UAbilitySystemComponent* ARPGDemoBaseCharacter::GetAbilitySystemComponent() cons
 	return GetRPGDemoAbilitySystemComponent();
 }
 
+UPawnCombatComponent* ARPGDemoBaseCharacter::GetPawnCombatComponent() const
+{
+	return nullptr;
+}
+
 void ARPGDemoBaseCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);

@@ -9,6 +9,14 @@
 
 class ARPGDemoWeaponBase;
 
+UENUM(BlueprintType)
+enum class EToggleDamageType : uint8
+{
+	CurrentEquippedWeapon,
+	LeftHand,
+	RightHand
+};
+
 /**
  * 
  */
@@ -29,6 +37,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Combat")
 	ARPGDemoWeaponBase* GetCharacterCurrentlyEquippedWeapon() const;
+
+	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Combat")
+	void ToggleWeaponCollision(bool bShouldEnable, EToggleDamageType ToggleDamageType = EToggleDamageType::CurrentEquippedWeapon);
 
 private:
 	TMap<FGameplayTag, ARPGDemoWeaponBase*> CharacterCarriedWeaponMap;

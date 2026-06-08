@@ -46,6 +46,11 @@ ARPGDemoHeroCharacter::ARPGDemoHeroCharacter()
 
 }
 
+UPawnCombatComponent* ARPGDemoHeroCharacter::GetPawnCombatComponent() const
+{
+	return HeroCombatComponent;
+}
+
 void ARPGDemoHeroCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);

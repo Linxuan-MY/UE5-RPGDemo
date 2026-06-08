@@ -26,6 +26,11 @@ ARPGDemoEnemyCharacter::ARPGDemoEnemyCharacter()
 	EnemyCombatComponent = CreateDefaultSubobject<UEnemyCombatComponent>(TEXT("EnemyCombatComponent"));
 }
 
+UPawnCombatComponent* ARPGDemoEnemyCharacter::GetPawnCombatComponent() const
+{
+	return EnemyCombatComponent;
+}
+
 void ARPGDemoEnemyCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
@@ -48,8 +53,6 @@ void ARPGDemoEnemyCharacter::InitEnemyStartUpData()
 				if(UDataAsset_StartUpDataBase* LoadedData = CharacterStartUpData.Get())
 				{
 					LoadedData->GiveToAbilitySystemComponent(RPGDemoAbilitySystemComponent);
-
-					Debug::Print(TEXT("Enemy Character initialized StartUpData!"), FColor::Green);
 				}
 			}
 		)

@@ -4,16 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "RPGDemoTypes/RPGDemoEnumTypes.h"
 #include "RPGDemoFunctionLibrary.generated.h"
 
 class URPGDemoAbilitySystemComponent;
+class UPawnCombatComponent;
 
-UENUM()
-enum class ERPGDemoConfirmType : uint8
-{
-	Yes,
-	No
-};
+
 
 /**
  * 
@@ -36,5 +33,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "RPGDemo|FunctionLibrary", meta = (DisplayName = "Does Actor Have Tag", ExpandEnumAsExecs = "OutConfirmType"))
 	static void BP_DoesActorHaveTag(AActor* InActor, FGameplayTag TagToCheck, ERPGDemoConfirmType& OutConfirmType);
+
+	static UPawnCombatComponent* NativeGetPawnCombatComponentFromActor(AActor* InActor);
+
+	UFUNCTION(BlueprintCallable, Category = "RPGDemo|FunctionLibrary", meta = (DisplayName = "Get Pawn Combat Component From Actor", ExpandEnumAsExecs = "OutValidType"))
+	static UPawnCombatComponent* BP_GetPawnCombatComponentFromActor(AActor* InActor, ERPGDemoValidType& OutValidType);
 	
 };

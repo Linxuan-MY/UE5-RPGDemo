@@ -21,6 +21,10 @@ class RPGDEMO_API ARPGDemoEnemyCharacter : public ARPGDemoBaseCharacter
 public:
 	ARPGDemoEnemyCharacter();
 
+	//~ Begin PawnCombatInterface interface
+	virtual UPawnCombatComponent* GetPawnCombatComponent() const override;
+	//~ End PawnCombatInterface interface
+
 protected:
 
 	//~ Begin APawn interface
