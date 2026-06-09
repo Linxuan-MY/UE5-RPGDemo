@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Abilities/GameplayAbility.h"
+#include "RPGDemoTypes/RPGDemoEnumTypes.h"
 #include "RPGDemoGameplayAbility.generated.h"
 
 class UPawnCombatComponent;
@@ -39,5 +40,9 @@ protected:
 	UFUNCTION(BlueprintPure, Category = "RPGDemo|Ability")
 	URPGDemoAbilitySystemComponent* GetRPGDemoAbilitySystemComponentFromActorInfo() const;
 
-	
+	FActiveGameplayEffectHandle NativeApplyEffectSpecToTarget(AActor* TargetActor, const FGameplayEffectSpecHandle& InSpecHandle);
+
+	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Ability", meta = (DisplayName = "Apply Gameplay Effect Spec To Target Actor", ExpandEnumAsExecs = "OutSuccessType"))
+	FActiveGameplayEffectHandle BP_ApplyEffectSpecToTarget(AActor* TargetActor, const FGameplayEffectSpecHandle& InSpecHandle, ERPGDemoSuccessType& OutSuccessType);
+
 };

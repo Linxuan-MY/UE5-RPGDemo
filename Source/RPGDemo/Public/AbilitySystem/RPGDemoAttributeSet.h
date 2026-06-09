@@ -48,4 +48,8 @@ public:
 	FGameplayAttributeData DefensePower;
 	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, DefensePower)
 
+	UPROPERTY(BlueprintReadOnly, Category = "Damage")
+	FGameplayAttributeData DamageTaken;
+	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, DamageTaken)
+
 };

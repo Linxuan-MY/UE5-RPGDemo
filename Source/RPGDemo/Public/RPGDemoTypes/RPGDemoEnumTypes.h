@@ -13,3 +13,10 @@ enum class ERPGDemoValidType : uint8
 	Valid,
 	Invalid
 };
+
+UENUM()
+enum class ERPGDemoSuccessType : uint8
+{
+	Successful,
+	Failed
+};

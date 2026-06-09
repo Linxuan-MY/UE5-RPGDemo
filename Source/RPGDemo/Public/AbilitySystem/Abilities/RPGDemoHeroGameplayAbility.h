@@ -27,6 +27,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "RPGDemo|Ability")
 	UHeroCombatComponent* GetHeroCombatComponentFromActorInfo();
 
+	UFUNCTION(BlueprintPure, Category = "RPGDemo|Ability")
+	FGameplayEffectSpecHandle MakeHeroDamageEffectSpecHandle(TSubclassOf<UGameplayEffect> EffectClass, float InWeaponBaseDamage, FGameplayTag InCurrentAttackTypeTag, int32 InUsedComboCount);
+
+
 private:
 	TWeakObjectPtr<ARPGDemoHeroCharacter> CachedRPGDemoHeroCharacter;
 	TWeakObjectPtr<ARPGDemoHeroController> CachedRPGDemoHeroController;

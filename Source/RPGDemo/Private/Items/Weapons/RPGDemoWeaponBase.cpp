@@ -33,7 +33,7 @@ void ARPGDemoWeaponBase::OnCollisionBoxBeginOverlap(UPrimitiveComponent* Overlap
 	{
 		if (WeaponOwningPawn != HitPawn)
 		{
-			Debug::Print(GetName() + TEXT(" beign overlap with ") + HitPawn->GetName(), FColor::Green);
+			OnWeaponHitTarget.ExecuteIfBound(OtherActor);
 		}
 	}
 }
@@ -48,7 +48,7 @@ void ARPGDemoWeaponBase::OnCollisionBoxEndOverlap(UPrimitiveComponent* Overlappe
 	{
 		if (WeaponOwningPawn != HitPawn)
 		{
-			Debug::Print(GetName() + TEXT(" end overlap with ") + HitPawn->GetName(), FColor::Red);
+			OnWeaponPulledFromTarget.ExecuteIfBound(OtherActor);
 		}
 	}
 }

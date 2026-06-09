@@ -4,6 +4,7 @@
 #include "AbilitySystem/Abilities/RPGDemoGameplayAbility.h"
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 #include "Components/Combat/PawnCombatComponent.h"
+#include "AbilitySystemBlueprintLibrary.h"
 
 void URPGDemoGameplayAbility::OnGiveAbility(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec)
 {
@@ -40,4 +41,27 @@ UPawnCombatComponent* URPGDemoGameplayAbility::GetPawnCombatComponentFromActorIn
 URPGDemoAbilitySystemComponent* URPGDemoGameplayAbility::GetRPGDemoAbilitySystemComponentFromActorInfo() const
 {
 	return Cast<URPGDemoAbilitySystemComponent>(CurrentActorInfo->AbilitySystemComponent);
+}
+
+FActiveGameplayEffectHandle URPGDemoGameplayAbility::NativeApplyEffectSpecToTarget(AActor* TargetActor, const FGameplayEffectSpecHandle& InSpecHandle)
+{
+	UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(TargetActor);
+
+	check(TargetASC && InSpecHandle.IsValid());
+
+	return GetRPGDemoAbilitySystemComponentFromActorInfo()->ApplyGameplayEffectSpecToTarget(
+		*InSpecHandle.Data,
+		TargetASC
+	);
+
+}
+
+FActiveGameplayEffectHandle URPGDemoGameplayAbility::BP_ApplyEffectSpecToTarget(AActor* TargetActor, const FGameplayEffectSpecHandle& InSpecHandle, ERPGDemoSuccessType& OutSuccessType)
+{
+	FActiveGameplayEffectHandle ActiveGameplayEffectHandle = NativeApplyEffectSpecToTarget(TargetActor, InSpecHandle);
+
+	OutSuccessType = ActiveGameplayEffectHandle.WasSuccessfullyApplied() ? ERPGDemoSuccessType::Successful : ERPGDemoSuccessType::Failed;
+
+	return ActiveGameplayEffectHandle;
+
 }

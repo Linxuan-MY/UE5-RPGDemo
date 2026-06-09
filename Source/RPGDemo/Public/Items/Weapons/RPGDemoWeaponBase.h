@@ -8,7 +8,7 @@
 
 class UBoxComponent;
 
-DECLARE_DELEGATE_OneParam(FOnTargetInteractedDelegate, AActor*);
+DECLARE_DELEGATE_OneParam(FOnTargetInteractedDelegate, AActor*)
 
 UCLASS()
 class RPGDEMO_API ARPGDemoWeaponBase : public AActor
@@ -18,6 +18,9 @@ class RPGDEMO_API ARPGDemoWeaponBase : public AActor
 public:	
 	// Sets default values for this actor's properties
 	ARPGDemoWeaponBase();
+
+	FOnTargetInteractedDelegate OnWeaponHitTarget;
+	FOnTargetInteractedDelegate OnWeaponPulledFromTarget;
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapons")
