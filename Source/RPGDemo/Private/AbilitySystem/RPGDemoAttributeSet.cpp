@@ -3,6 +3,8 @@
 
 #include "AbilitySystem/RPGDemoAttributeSet.h"
 #include "GameplayEffectExtension.h"
+#include "RPGDemoFunctionLibrary.h"
+#include "RPGDemoGameplayTags.h"
 
 #include "RPGDemoDebugHelper.h"
 
@@ -50,6 +52,14 @@ void URPGDemoAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCal
 		);
 
 		Debug::Print(DebugString, FColor::Green);
+
+		// TODO: Notify the UI
+
+		if (NewCurrentHealth == 0.f)
+		{
+			URPGDemoFunctionLibrary::AddGameplayTagToActorIfNone(Data.Target.GetAvatarActor(), RPGDemoGameplayTags::Shared_Status_Dead);
+		}
+
 	}
 
 }
