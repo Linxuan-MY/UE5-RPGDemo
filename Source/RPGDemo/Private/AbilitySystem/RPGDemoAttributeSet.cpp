@@ -5,6 +5,9 @@
 #include "GameplayEffectExtension.h"
 #include "RPGDemoFunctionLibrary.h"
 #include "RPGDemoGameplayTags.h"
+#include "Interfaces/PawnUIInterface.h"
+#include "Components/UI/PawnUIComponent.h"
+#include "Components/UI/HeroUIComponent.h"
 
 #include "RPGDemoDebugHelper.h"
 
@@ -21,11 +24,24 @@ URPGDemoAttributeSet::URPGDemoAttributeSet()
 
 void URPGDemoAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
 {
+	if(!CachedPawnUIInterface.IsValid())
+	{
+		CachedPawnUIInterface = TWeakInterfacePtr<IPawnUIInterface>(Data.Target.GetAvatarActor());
+	}
+
+	checkf(CachedPawnUIInterface.IsValid(), TEXT("%s didn't implement IPawnUIInterface"), *Data.Target.GetAvatarActor()->GetActorNameOrLabel());
+
+	UPawnUIComponent* PawnUIComponent = CachedPawnUIInterface->GetPawnUIComponent();
+
+	checkf(PawnUIComponent, TEXT("Couldn't get PawnUIComponent in %s"), *Data.Target.GetAvatarActor()->GetActorNameOrLabel());
+
 	if (Data.EvaluatedData.Attribute == GetCurrentHealthAttribute())
 	{
 		const float NewCurrentHealth = FMath::Clamp(GetCurrentHealth(), 0.f, GetMaxHealth());
 
 		SetCurrentHealth(NewCurrentHealth);
+
+		PawnUIComponent->OnCurrentHealthChanged.Broadcast(NewCurrentHealth / GetMaxHealth());
 	}
 
 	if (Data.EvaluatedData.Attribute == GetCurrentRageAttribute())
@@ -33,6 +49,11 @@ void URPGDemoAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCal
 		const float NewCurrentRage = FMath::Clamp(GetCurrentRage(), 0.f, GetMaxRage());
 
 		SetCurrentRage(NewCurrentRage);
+
+		if (UHeroUIComponent* HeroUIComponent = CachedPawnUIInterface->GetHeroUIComponent())
+		{
+			HeroUIComponent->OnCurrentRageChanged.Broadcast(NewCurrentRage / GetMaxRage());
+		}
 	}
 
 	if(Data.EvaluatedData.Attribute == GetDamageTakenAttribute())
@@ -44,6 +65,8 @@ void URPGDemoAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCal
 
 		SetCurrentHealth(NewCurrentHealth);
 
+		PawnUIComponent->OnCurrentHealthChanged.Broadcast(NewCurrentHealth / GetMaxHealth());
+
 		const FString DebugString = FString::Printf(
 			TEXT("Damage Taken: %f, Old Health: %f, New Health: %f"),
 			DamageDone,
@@ -53,9 +76,7 @@ void URPGDemoAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCal
 
 		Debug::Print(DebugString, FColor::Green);
 
-		// TODO: Notify the UI
-
-		if (NewCurrentHealth == 0.f)
+		if (GetCurrentHealth() == 0.f)
 		{
 			URPGDemoFunctionLibrary::AddGameplayTagToActorIfNone(Data.Target.GetAvatarActor(), RPGDemoGameplayTags::Shared_Status_Dead);
 		}

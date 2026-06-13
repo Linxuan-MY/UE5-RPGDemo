@@ -13,6 +13,7 @@
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 #include "DataAssets/StartUpData/DataAsset_HeroStartUpData.h"
 #include "Components/Combat/HeroCombatComponent.h"
+#include "Components/UI/HeroUIComponent.h"
 
 #include "RPGDemoDebugHelper.h"
 
@@ -44,11 +45,23 @@ ARPGDemoHeroCharacter::ARPGDemoHeroCharacter()
 
 	HeroCombatComponent = CreateDefaultSubobject<UHeroCombatComponent>(TEXT("HeroCombatComponent"));
 
+	HeroUIComponent = CreateDefaultSubobject<UHeroUIComponent>(TEXT("HeroUIComponent"));
+
 }
 
 UPawnCombatComponent* ARPGDemoHeroCharacter::GetPawnCombatComponent() const
 {
 	return HeroCombatComponent;
+}
+
+UPawnUIComponent* ARPGDemoHeroCharacter::GetPawnUIComponent() const
+{
+	return HeroUIComponent;
+}
+
+UHeroUIComponent* ARPGDemoHeroCharacter::GetHeroUIComponent() const
+{
+	return HeroUIComponent;
 }
 
 void ARPGDemoHeroCharacter::PossessedBy(AController* NewController)

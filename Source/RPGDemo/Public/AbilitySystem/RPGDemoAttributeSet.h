@@ -7,6 +7,8 @@
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 #include "RPGDemoAttributeSet.generated.h"
 
+class IPawnUIInterface;
+
 #define ATTRIBUTE_ACCESSORS(ClassName, PropertyName) \
 GAMEPLAYATTRIBUTE_PROPERTY_GETTER(ClassName, PropertyName) \
 GAMEPLAYATTRIBUTE_VALUE_GETTER(PropertyName) \
@@ -54,5 +56,8 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Damage")
 	FGameplayAttributeData DamageTaken;
 	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, DamageTaken)
+
+private:
+	TWeakInterfacePtr<IPawnUIInterface> CachedPawnUIInterface;
 
 };

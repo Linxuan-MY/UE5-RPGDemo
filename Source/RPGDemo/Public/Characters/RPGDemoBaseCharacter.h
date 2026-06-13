@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
 #include "Interfaces/PawnCombatInterface.h"
+#include "Interfaces/PawnUIInterface.h"
 #include "RPGDemoBaseCharacter.generated.h"
 
 class URPGDemoAbilitySystemComponent;
@@ -13,7 +14,7 @@ class URPGDemoAttributeSet;
 class UDataAsset_StartUpDataBase;
 
 UCLASS()
-class RPGDEMO_API ARPGDemoBaseCharacter : public ACharacter, public IAbilitySystemInterface, public IPawnCombatInterface
+class RPGDEMO_API ARPGDemoBaseCharacter : public ACharacter, public IAbilitySystemInterface, public IPawnCombatInterface, public IPawnUIInterface
 {
 	GENERATED_BODY()
 
@@ -28,6 +29,10 @@ public:
 	//~ Begin PawnCombatInterface interface
 	virtual UPawnCombatComponent* GetPawnCombatComponent() const override;
 	//~ End PawnCombatInterface interface
+
+	//~ Begin PawnUIInterface interface
+	virtual UPawnUIComponent* GetPawnUIComponent() const override;
+	//~ End PawnUIInterface interface
 
 protected:
 	//~ Begin APawn interface
