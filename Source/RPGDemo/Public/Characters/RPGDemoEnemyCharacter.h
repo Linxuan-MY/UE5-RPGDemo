@@ -8,6 +8,7 @@
 
 class UEnemyCombatComponent;
 class UEnemyUIComponent;
+class UWidgetComponent;
 
 
 
@@ -32,6 +33,7 @@ public:
 	//~ End PawnUIInterface interface
 
 protected:
+	virtual void BeginPlay() override;
 
 	//~ Begin APawn interface
 	virtual void PossessedBy(AController* NewController) override;
@@ -42,6 +44,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
 	UEnemyUIComponent* EnemyUIComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
+	UWidgetComponent* EnemyHealthWidgetComponent;
 
 
 public:

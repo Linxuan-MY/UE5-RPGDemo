@@ -7,6 +7,8 @@
 #include "Engine/AssetManager.h"
 #include "DataAssets/StartUpData/DataAsset_EnemyStartUpData.h"
 #include "Components/UI/EnemyUIComponent.h"
+#include "Components/WidgetComponent.h"
+#include "Widgets/RPGDemoWidgetBase.h"
 
 #include "RPGDemoDebugHelper.h"
 
@@ -27,6 +29,9 @@ ARPGDemoEnemyCharacter::ARPGDemoEnemyCharacter()
 	EnemyCombatComponent = CreateDefaultSubobject<UEnemyCombatComponent>(TEXT("EnemyCombatComponent"));
 
 	EnemyUIComponent = CreateDefaultSubobject<UEnemyUIComponent>(TEXT("EnemyUIComponent"));
+
+	EnemyHealthWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("EnemyHealthWidgetComponent"));
+	EnemyHealthWidgetComponent->SetupAttachment(GetMesh());
 }
 
 UPawnCombatComponent* ARPGDemoEnemyCharacter::GetPawnCombatComponent() const
@@ -42,6 +47,16 @@ UPawnUIComponent* ARPGDemoEnemyCharacter::GetPawnUIComponent() const
 UEnemyUIComponent* ARPGDemoEnemyCharacter::GetEnemyUIComponent() const
 {
 	return EnemyUIComponent;
+}
+
+void ARPGDemoEnemyCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if(URPGDemoWidgetBase* HealthWidget = Cast<URPGDemoWidgetBase>(EnemyHealthWidgetComponent->GetUserWidgetObject()))
+	{
+		HealthWidget->InitEnemyCreatedWidget(this);
+	}
 }
 
 void ARPGDemoEnemyCharacter::PossessedBy(AController* NewController)
