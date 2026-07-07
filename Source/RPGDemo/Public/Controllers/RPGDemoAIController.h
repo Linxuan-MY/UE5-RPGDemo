@@ -20,6 +20,10 @@ class RPGDEMO_API ARPGDemoAIController : public AAIController
 public:
 	ARPGDemoAIController(const FObjectInitializer& ObjectInitializer);
 
+	//~Begin IGenericTeamAgentInterface Interface
+	virtual ETeamAttitude::Type GetTeamAttitudeTowards(const AActor& Other) const override;
+	//~End IGenericTeamAgentInterface Interface
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	UAIPerceptionComponent* EnemyPerceptionComponent;

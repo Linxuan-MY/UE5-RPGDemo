@@ -3,3 +3,12 @@
 
 #include "Controllers/RPGDemoHeroController.h"
 
+ARPGDemoHeroController::ARPGDemoHeroController()
+{
+	HeroTeamId = FGenericTeamId(0);
+}
+
+FGenericTeamId ARPGDemoHeroController::GetGenericTeamId() const
+{
+    return HeroTeamId;
+}
