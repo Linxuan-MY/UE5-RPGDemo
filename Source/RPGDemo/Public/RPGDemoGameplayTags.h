@@ -39,6 +39,7 @@ namespace RPGDemoGameplayTags
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Enemy_Weapon);
 
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Enemy_Status_Strafe);
+	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Enemy_Status_UnderAttack);
 
 	/** Shared Tags **/
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Ability_HitReact);

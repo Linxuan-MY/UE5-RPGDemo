@@ -5,7 +5,7 @@
 
 namespace RPGDemoGameplayTags
 {
-	/** Input Tags **/ 
+	/** Input Tags **/
 	UE_DEFINE_GAMEPLAY_TAG(InputTag_Move, "Input.Move");
 	UE_DEFINE_GAMEPLAY_TAG(InputTag_Look, "Input.Look");
 	UE_DEFINE_GAMEPLAY_TAG(InputTag_EquipAxe, "Input.EquipAxe");
@@ -38,6 +38,7 @@ namespace RPGDemoGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG(Enemy_Weapon, "Enemy.Weapon");
 
 	UE_DEFINE_GAMEPLAY_TAG(Enemy_Status_Strafe, "Enemy.Status.Strafe");
+	UE_DEFINE_GAMEPLAY_TAG(Enemy_Status_UnderAttack, "Enemy.Status.UnderAttack");
 
 	/** Shared Tags **/
 	UE_DEFINE_GAMEPLAY_TAG(Shared_Ability_HitReact, "Shared.Ability.HitReact");
