@@ -3,6 +3,7 @@
 
 #include "Items/Weapons/RPGDemoWeaponBase.h"
 #include "Components/BoxComponent.h"
+#include "RPGDemoFunctionLibrary.h"
 
 #include "RPGDemoDebugHelper.h"
 
@@ -29,9 +30,9 @@ void ARPGDemoWeaponBase::OnCollisionBoxBeginOverlap(UPrimitiveComponent* Overlap
 
 	checkf(WeaponOwningPawn, TEXT("Weapon %s does not have a valid instigator pawn!"), *GetName());
 
-	if(APawn* HitPawn = Cast<APawn>(OtherActor))
+	if (APawn* HitPawn = Cast<APawn>(OtherActor))
 	{
-		if (WeaponOwningPawn != HitPawn)
+		if (URPGDemoFunctionLibrary::TargetPawnHostile(WeaponOwningPawn, HitPawn))
 		{
 			OnWeaponHitTarget.ExecuteIfBound(OtherActor);
 		}
@@ -46,7 +47,7 @@ void ARPGDemoWeaponBase::OnCollisionBoxEndOverlap(UPrimitiveComponent* Overlappe
 
 	if (APawn* HitPawn = Cast<APawn>(OtherActor))
 	{
-		if (WeaponOwningPawn != HitPawn)
+		if (URPGDemoFunctionLibrary::TargetPawnHostile(WeaponOwningPawn, HitPawn))
 		{
 			OnWeaponPulledFromTarget.ExecuteIfBound(OtherActor);
 		}

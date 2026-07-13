@@ -42,7 +42,7 @@ protected:
 
 	FActiveGameplayEffectHandle NativeApplyEffectSpecToTarget(AActor* TargetActor, const FGameplayEffectSpecHandle& InSpecHandle);
 
-	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Ability", meta = (DisplayName = "Apply Gameplay Effect Spec To Target Actor", ExpandEnumAsExecs = "OutSuccessType"))
-	FActiveGameplayEffectHandle BP_ApplyEffectSpecToTarget(AActor* TargetActor, const FGameplayEffectSpecHandle& InSpecHandle, ERPGDemoSuccessType& OutSuccessType);
+	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Ability", meta = (DisplayName = "Apply Gameplay Effect Spec Handle To Target Actor", ExpandEnumAsExecs = "OutSuccessType"))
+	FActiveGameplayEffectHandle BP_ApplyEffectSpecHandleToTarget(AActor* TargetActor, const FGameplayEffectSpecHandle& InSpecHandle, ERPGDemoSuccessType& OutSuccessType);
 
 };

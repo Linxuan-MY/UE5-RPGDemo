@@ -2,7 +2,7 @@
 
 
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
-#include "AbilitySystem/Abilities/RPGDemoGameplayAbility.h"
+#include "AbilitySystem/Abilities/RPGDemoHeroGameplayAbility.h"
 
 void URPGDemoAbilitySystemComponent::OnAbilityInputPressed(const FGameplayTag InInputTag)
 {
@@ -52,4 +52,26 @@ void URPGDemoAbilitySystemComponent::RemoveGrantedHeroWeaponAbilities(UPARAM(ref
 	}
 
 	InSpecHandlesToRemove.Empty();
+}
+
+bool URPGDemoAbilitySystemComponent::TryActivateAbilityByTag(FGameplayTag AbilityTagToActivate)
+{
+	check(AbilityTagToActivate.IsValid());
+
+	TArray<FGameplayAbilitySpec*> FoundAbilitiesSpecs;
+	GetActivatableGameplayAbilitySpecsByAllMatchingTags(AbilityTagToActivate.GetSingleTagContainer(), FoundAbilitiesSpecs);
+
+	if(!FoundAbilitiesSpecs.IsEmpty())
+	{
+		const int32 RandomAbilityIndex = FMath::RandRange(0, FoundAbilitiesSpecs.Num() - 1);
+		FGameplayAbilitySpec* AbilitySpecToActivate = FoundAbilitiesSpecs[RandomAbilityIndex];
+
+		check(AbilitySpecToActivate);
+		if(!AbilitySpecToActivate->IsActive())
+		{
+			return TryActivateAbility(AbilitySpecToActivate->Handle);
+		}
+	}
+
+	return false;
 }

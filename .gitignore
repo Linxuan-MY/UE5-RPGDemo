@@ -32,6 +32,7 @@
 .vscode/.browse.VC.db*
 .vscode/ipch/
 .idea/
+/Plugins/Developer/RiderLink/
 *.code-workspace
 *.DotSettings.user
 

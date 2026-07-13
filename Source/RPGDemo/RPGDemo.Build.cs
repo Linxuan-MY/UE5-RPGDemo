@@ -16,7 +16,9 @@ public class RPGDemo : ModuleRules
 			"EnhancedInput", 
 			"GameplayTags",
 			"GameplayTasks",
-        });
+			"AnimGraphRuntime",
+			"MotionWarping"
+		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 

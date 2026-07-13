@@ -3,6 +3,8 @@
 
 #include "AbilitySystem/Abilities/RPGDemoEnemyGameplayAbility.h"
 #include "Characters/RPGDemoEnemyCharacter.h"
+#include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
+#include "RPGDemoGameplayTags.h"
 
 ARPGDemoEnemyCharacter* URPGDemoEnemyGameplayAbility::GetEnemyCharacterFromActorInfo()
 {
@@ -16,4 +18,27 @@ ARPGDemoEnemyCharacter* URPGDemoEnemyGameplayAbility::GetEnemyCharacterFromActor
 UEnemyCombatComponent* URPGDemoEnemyGameplayAbility::GetEnemyCombatComponentFromActorInfo()
 {
 	return GetEnemyCharacterFromActorInfo()->GetEnemyCombatComponent();
+}
+
+FGameplayEffectSpecHandle URPGDemoEnemyGameplayAbility::MakeEnemyDamageEffectSpecHandle(TSubclassOf<UGameplayEffect> EffectClass, const FScalableFloat& InDamageScalableFloat)
+{
+	check(EffectClass);
+
+	FGameplayEffectContextHandle ContextHandle = GetRPGDemoAbilitySystemComponentFromActorInfo()->MakeEffectContext();
+	ContextHandle.SetAbility(this);
+	ContextHandle.AddSourceObject(GetAvatarActorFromActorInfo());
+	ContextHandle.AddInstigator(GetAvatarActorFromActorInfo(), GetAvatarActorFromActorInfo());
+
+	FGameplayEffectSpecHandle EffectSpecHandle = GetRPGDemoAbilitySystemComponentFromActorInfo()->MakeOutgoingSpec(
+		EffectClass,
+		GetAbilityLevel(),
+		ContextHandle
+	);
+
+	EffectSpecHandle.Data->SetSetByCallerMagnitude(
+		RPGDemoGameplayTags::Shared_SetByCaller_BaseDamage,
+		InDamageScalableFloat.GetValueAtLevel(GetAbilityLevel())
+	);
+
+	return EffectSpecHandle;
 }

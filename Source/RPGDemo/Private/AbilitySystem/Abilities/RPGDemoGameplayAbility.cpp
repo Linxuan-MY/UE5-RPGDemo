@@ -56,7 +56,7 @@ FActiveGameplayEffectHandle URPGDemoGameplayAbility::NativeApplyEffectSpecToTarg
 
 }
 
-FActiveGameplayEffectHandle URPGDemoGameplayAbility::BP_ApplyEffectSpecToTarget(AActor* TargetActor, const FGameplayEffectSpecHandle& InSpecHandle, ERPGDemoSuccessType& OutSuccessType)
+FActiveGameplayEffectHandle URPGDemoGameplayAbility::BP_ApplyEffectSpecHandleToTarget(AActor* TargetActor, const FGameplayEffectSpecHandle& InSpecHandle, ERPGDemoSuccessType& OutSuccessType)
 {
 	FActiveGameplayEffectHandle ActiveGameplayEffectHandle = NativeApplyEffectSpecToTarget(TargetActor, InSpecHandle);
 

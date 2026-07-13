@@ -4,6 +4,7 @@
 #include "Characters/RPGDemoBaseCharacter.h"
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 #include "AbilitySystem/RPGDemoAttributeSet.h"
+#include "MotionWarpingComponent.h"
 
 // Sets default values
 ARPGDemoBaseCharacter::ARPGDemoBaseCharacter()
@@ -17,6 +18,8 @@ ARPGDemoBaseCharacter::ARPGDemoBaseCharacter()
 	RPGDemoAbilitySystemComponent = CreateDefaultSubobject<URPGDemoAbilitySystemComponent>(TEXT("RPGDemoAbilitySystemComponent"));
 
 	RPGDemoAttributeSet = CreateDefaultSubobject<URPGDemoAttributeSet>(TEXT("RPGDemoAttributeSet"));
+
+	MotionWarpingComponent = CreateDefaultSubobject<UMotionWarpingComponent>(TEXT("MotionWarpingComponent"));
 }
 
 UAbilitySystemComponent* ARPGDemoBaseCharacter::GetAbilitySystemComponent() const

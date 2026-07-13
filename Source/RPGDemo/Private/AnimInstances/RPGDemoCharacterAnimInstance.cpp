@@ -4,6 +4,7 @@
 #include "AnimInstances/RPGDemoCharacterAnimInstance.h"
 #include "Characters/RPGDemoBaseCharacter.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "KismetAnimationLibrary.h"
 
 void URPGDemoCharacterAnimInstance::NativeInitializeAnimation()
 {
@@ -27,4 +28,5 @@ void URPGDemoCharacterAnimInstance::NativeThreadSafeUpdateAnimation(float DeltaS
 
 	bHasAcceleration = OwningMovementComponent->GetCurrentAcceleration().SizeSquared2D() > 0.f;
 
+	LocomotionDirection = UKismetAnimationLibrary::CalculateDirection(OwningCharacter->GetVelocity(), OwningCharacter->GetActorRotation());
 }
