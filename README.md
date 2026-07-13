@@ -1,380 +1,179 @@
 # RPGDemo
 
-RPGDemo 是一个基于 Unreal Engine 5.4 的第三人称动作 RPG Demo 项目。工程以 C++ Gameplay 框架为核心，配合 Blueprint 资产搭建角色、输入、Gameplay Ability System、战斗组件、武器生成、命中检测、伤害结算、受击与死亡反馈、角色状态 UI、动画层和基础敌人流程。
+RPGDemo 是一个基于 Unreal Engine 5.4 的第三人称动作 RPG 技术 Demo。项目重点不是堆叠完整游戏内容，而是验证一套可以扩展的动作 RPG Gameplay 架构：用 C++ 承担核心运行时框架，用 Blueprint 和数据资产承载角色、能力、动画、AI 行为和反馈表现。
 
-## 环境要求
+当前 Demo 已形成一条可体验的玩法闭环：玩家角色使用斧类武器进行轻攻击和重攻击，敌人通过感知系统进入追击、转向、走位、近战攻击、受击反馈和死亡流程，战斗结果同步驱动 UI、动画、Hit Pause、Camera Shake 和 Gameplay Cue。
 
-- Unreal Engine：5.4
-- 目标平台：桌面端，当前工程配置以 Windows / DX12 为主
-- IDE：Visual Studio，所需组件见 `.vsconfig`
-- 项目插件：
-  - GameplayAbilities
-  - ModelingToolsEditorMode，仅编辑器使用
-- 版本管理：
-  - `.uasset`、`.umap` 等 Unreal 二进制资产需要通过 Git LFS 拉取
+## 技术栈
 
-## 当前内容
+- Unreal Engine 5.4
+- C++ Gameplay Framework
+- Gameplay Ability System
+- Enhanced Input
+- Gameplay Tags
+- AI Perception、Behavior Tree、Blackboard、EQS
+- Detour Crowd Avoidance
+- Motion Warping
+- UMG
+- Blueprint Data Assets、Animation Blueprint、Anim Notify / Anim Notify State
+- Git LFS，用于管理 `.uasset`、`.umap` 等二进制资源
 
-- C++ Runtime 模块：`RPGDemo`
-- 默认地图：`/Game/Maps/FeatureDevMap`
-- 默认 GameMode：`/Game/GameModes/BP_BaseGameMode`
-- GameMode 当前指定：
-  - 默认 Pawn：`BP_HeroCharacter`
-  - PlayerController：`BP_HeroController`
-- 角色基类实现 `IAbilitySystemInterface`，集中持有：
-  - `URPGDemoAbilitySystemComponent`
-  - `URPGDemoAttributeSet`
-  - `CharacterStartUpData`
-- Ability System Debug 配置已启用 HUD target：
-  - `bUseDebugTargetFromHud=true`
-- 近战命中链路已接入：
-  - 武器碰撞检测
-  - GameplayEvent 驱动的伤害和 Hit Pause
-  - GAS ExecutionCalculation 伤害结算
-  - 生命值扣减和敌人受击反应
-- 角色 UI 链路已接入：
-  - Hero Overlay、生命值和怒气状态栏
-  - 装备武器图标
-  - 敌人头顶生命值条
-  - AttributeSet 通过 UI Component 委托广播属性变化
-- 敌人死亡流程已接入：
-  - 生命值归零后添加 `Shared.Status.Dead`
-  - 通用敌人死亡能力和 Guardian 死亡能力
-  - Guardian 死亡蒙太奇和 Gameplay Cue 音效
+## 项目亮点
 
-## Gameplay Ability System
+### GAS 驱动的角色能力框架
 
-项目当前已有一条可复用的 GAS 启动管线：
+项目以 Gameplay Ability System 作为角色能力、属性和战斗结算的核心。基础角色统一持有自定义 `URPGDemoAbilitySystemComponent` 和 `URPGDemoAttributeSet`，Hero 与 Enemy 通过各自的 StartUpData 获得初始 Ability 和 GameplayEffect。
 
-- 自定义 `URPGDemoAbilitySystemComponent`
-- 自定义 `URPGDemoAttributeSet`
-- 角色被 Possess 时初始化 `AbilityActorInfo`
-- StartUpData 负责向 ASC 授予能力和应用启动 GameplayEffect
-- 支持两类能力激活策略：
-  - `OnTriggered`：由输入或事件触发
-  - `OnGiven`：授予能力时自动激活，结束后清理
-- 按 Gameplay Tag 绑定输入和 Ability
-- 支持武器能力的动态授予与移除
+能力授予和激活并不直接绑定具体按键或蓝图节点，而是通过 Gameplay Tag 建立连接。Hero 的输入配置把 Enhanced Input Action 映射到 `Input.*` 标签，ASC 再根据 AbilitySpec 的 Dynamic Ability Tags 激活对应能力。武器装备后也可以动态授予和移除武器能力，使角色基础能力与武器能力保持解耦。
 
-当前 AttributeSet 包含：
+伤害结算使用自定义 ExecutionCalculation。攻击 Ability 构建 GameplayEffect Spec，通过 SetByCaller 写入基础伤害、攻击类型和连击段数；执行计算再读取 Source `AttackPower`、Target `DefensePower`，计算最终伤害并写回 `DamageTaken`。AttributeSet 在 `PostGameplayEffectExecute` 中完成生命值扣减、属性夹紧、UI 广播和死亡状态标签写入。
 
-- `CurrentHealth`
-- `MaxHealth`
-- `CurrentRage`
-- `MaxRage`
-- `AttackPower`
-- `DefensePower`
-- `DamageTaken`
+### 数据驱动的近战战斗链路
 
-GAS 伤害流程当前包括：
+近战系统围绕 CombatComponent、武器 Actor、Gameplay Event 和 Animation Notify 组织。角色通过 Gameplay Tag 注册当前持有武器，攻击蒙太奇中的 `ANS_ToggleWeaponCollision` 控制武器碰撞窗口，武器碰撞盒只在有效攻击帧启用。
 
-- `URPGDemoGameplayAbility` 支持把已构建的 GameplayEffect Spec 应用到目标 Actor
-- `URPGDemoHeroGameplayAbility` 支持根据武器基础伤害、攻击类型和连击段数构建伤害 Spec
-- `GE_Shared_DealDamage` 使用 `UGE_ExecCalc_DamageTaken` 计算伤害
-- 伤害计算会读取 Source `AttackPower`、Target `DefensePower` 和 SetByCaller 传入的基础伤害
-- 轻攻击和重攻击可通过不同 SetByCaller Tag 按连击段数调整基础伤害
-- `PostGameplayEffectExecute` 负责夹紧 Health/Rage、把 `DamageTaken` 扣减到 `CurrentHealth`，并广播 UI 百分比变化
-- 生命值归零时为目标添加 `Shared.Status.Dead`，供死亡能力响应
+命中发生后，CombatComponent 会过滤重复命中目标，并向拥有者发送 `Shared.Event.MeleeHit`。Hero 侧还会额外发送 `Player.Event.HitPause`，用于驱动命中停顿和镜头反馈。最终伤害由共享 GameplayEffect 结算，敌人受击和死亡再由响应型 Ability 处理。这样的链路让“攻击输入、动画窗口、碰撞命中、伤害计算、反馈表现”保持清晰边界。
 
-## 输入系统
+### 敌人 AI 行为闭环
 
-项目使用 Enhanced Input，并通过 Gameplay Tag 组织输入绑定：
+敌人侧已经接入基础 AI 行为链路。`ARPGDemoAIController` 使用 AI Perception 进行视野感知，并通过 Generic Team Id 区分敌我关系；路径跟随使用 `UCrowdFollowingComponent`，并在项目配置中启用 CrowdManager 避障参数。
 
-- `UDataAsset_InputConfig` 保存输入 Action 与 Tag 的映射
-- `URPGDemoInputComponent` 封装 Native Input 和 Ability Input 绑定
-- Hero 角色在 `SetupPlayerInputComponent` 中注册默认 Mapping Context
-- 输入按下后转发到 `URPGDemoAbilitySystemComponent::OnAbilityInputPressed`
+Behavior Tree 和 Blackboard 负责组织 Guardian 的战斗状态。项目中包含原生 BTTask / BTService，用于面向目标旋转和持续朝向目标；蓝图行为树资产进一步组织追击、距离检测、EQS 走位、Strafe 状态切换、按标签激活敌人 Ability、以及攻击目标更新。敌人近战攻击同样复用共享命中事件和伤害 GameplayEffect，因此玩家与敌人的战斗流程不是两套割裂实现。
 
-当前主要输入包括：
+### UI 与反馈事件流
 
-- Move
-- Look
-- Equip Axe
-- Unequip Axe
-- Light Attack Axe
-- Heavy Attack Axe
+UI 数据不直接散落在角色或 Widget 蓝图中，而是通过 `PawnUIComponent`、`HeroUIComponent`、`EnemyUIComponent` 和 `IPawnUIInterface` 建立统一的数据入口。AttributeSet 在属性变化时广播生命值、怒气等百分比，Widget 基类在初始化时获取对应 UI Component，Blueprint Widget 只负责表现层绑定。
 
-## 角色
+战斗反馈也沿用事件化思路。Gameplay Cue 负责命中和死亡音效，Hit Pause Ability 和 Camera Shake 负责近战打击感，敌人死亡通过 `Shared.Status.Dead` 标签触发后续死亡能力。这样可以把战斗结果、状态变化和表现反馈串联起来，同时减少系统之间的直接依赖。
 
-### Hero
+### C++ 与 Blueprint 的职责拆分
 
-英雄角色当前负责玩家侧的移动、镜头、输入和战斗入口：
+项目把稳定、可复用、需要强类型约束的逻辑放在 C++ 中，包括 ASC 扩展、AttributeSet、Ability 基类、CombatComponent、AIController、BTTask / BTService、输入组件、UI Component 和通用函数库。Blueprint 主要承担资产配置、Ability 具体表现、Behavior Tree 编排、Animation Blueprint、Widget 表现和 DataAsset 填表。
 
-- Capsule、Spring Arm、Follow Camera
-- Enhanced Input 绑定
-- HeroCombatComponent
-- HeroUIComponent
-- Hero StartUpData 同步加载
-- 武器能力按输入 Tag 绑定
-- Axe 装备、卸下、轻攻击、重攻击相关能力和蒙太奇资产
-- Hero Overlay、生命值/怒气状态栏和装备武器图标
+这种拆分使 Demo 既能体现 C++ 架构能力，也保留 UE 工作流中快速迭代内容的优势。
 
-### Enemy
+## 当前可体验内容
 
-敌人角色当前已有基础 C++ 和 Blueprint 管线：
+- 第三人称 Hero 角色移动、镜头控制、斧类武器装备和卸下
+- 轻攻击、重攻击和连击段数参与伤害倍率
+- 基于武器碰撞窗口的近战命中检测
+- 命中停顿、近战 Camera Shake、命中音效 Gameplay Cue
+- Hero 生命值、怒气和装备武器图标 UI
+- Enemy 头顶生命值条
+- Guardian 敌人感知玩家、追击、转向、走位、近战攻击
+- Guardian 受击反应、死亡 Ability、死亡蒙太奇和死亡音效
+- EQS Strafe 走位、敌人近战 Ability 随行为树激活
 
-- `ARPGDemoEnemyCharacter`
-- `UEnemyCombatComponent`
-- 自动 AI Possess：`PlacedInWorldOrSpawned`
-- Enemy StartUpData 异步加载
-- Enemy GameplayAbility 基类
-- Guardian 敌人 Blueprint、动画蓝图、启动数据、启动 GameplayEffect 和生成武器能力
-- Guardian HitReact 能力和受击蒙太奇
-- EnemyUIComponent 和敌人头顶生命值 WidgetComponent
-- 通用敌人死亡能力、Guardian 死亡能力和死亡蒙太奇
+默认地图为 `/Game/Maps/FeatureDevMap`，默认 GameMode 为 `/Game/GameModes/BP_BaseGameMode`。
 
-当前主要敌人资产位于：
+## 核心流程
 
-- `Content/EnemyCharacter/BP_EnemyCharacter_Base.uasset`
-- `Content/EnemyCharacter/BP_EnemyWeapon_Base.uasset`
-- `Content/EnemyCharacter/Gruntling/BP_Gruntling_Base.uasset`
-- `Content/EnemyCharacter/Gruntling/BP_Gruntling_Guardian.uasset`
-- `Content/EnemyCharacter/Gruntling/DA_Guardian.uasset`
-- `Content/EnemyCharacter/Gruntling/GameplayAbility/GA_Guardian_HitReact.uasset`
-- `Content/EnemyCharacter/Gruntling/GameplayAbility/GA_Guardian_Death.uasset`
-- `Content/EnemyCharacter/Gruntling/Montages/AM_ExoGame_Gruntling_React_Light_Front.uasset`
-- `Content/EnemyCharacter/Gruntling/Montages/AM_ExoGame_Gruntling_React_Light_Front_Alt.uasset`
-- `Content/EnemyCharacter/Gruntling/Montages/Death/`
-
-## 战斗和武器
-
-当前战斗框架以 PawnCombatComponent 为基础：
-
-- 使用 Gameplay Tag 注册角色持有的武器
-- 保存当前装备武器 Tag
-- 支持按 Tag 查询武器
-- 基础武器 Actor 提供 Mesh 和碰撞盒
-- 武器碰撞盒通过 BeginOverlap / EndOverlap 回调通知 CombatComponent
-- `ToggleWeaponCollision` 支持在蒙太奇窗口中开启或关闭当前装备武器碰撞
-- CombatComponent 会记录本次攻击已命中的 Actor，避免同一窗口重复命中
-- Hero 和 Enemy 分别有自己的 CombatComponent 派生类
-- Hero CombatComponent 可查询当前装备武器和按等级读取武器基础伤害
-- 通用武器生成能力位于 Shared GameplayAbility 目录
-
-相关资产包括：
-
-- `Content/PlayerCharacter/HeroWeapon/BP_HeroWeaponBase.uasset`
-- `Content/PlayerCharacter/HeroWeapon/BP_HeroAxe.uasset`
-- `Content/EnemyCharacter/BP_EnemyWeapon_Base.uasset`
-- `Content/EnemyCharacter/Gruntling/BP_Guardian_Weapon.uasset`
-- `Content/PlayerCharacter/HeroWeapon/CT_HeroWeaponStats.uasset`
-- `Content/Shared/GameplayAbility/GA_Shared_SpawnWeapon_Base.uasset`
-
-## 命中、伤害和反馈
-
-当前近战攻击链路：
-
-- 攻击蒙太奇通过 `ANS_ToggleWeaponCollision` 控制武器碰撞窗口
-- `ARPGDemoWeaponBase` 在碰撞开始和结束时派发命中/拔出委托
-- `UHeroCombatComponent` 接收命中后发送 `Shared.Event.MeleeHit`
-- 命中和武器拔出目标时都会发送 `Player.Event.HitPause`
-- Hero 攻击能力根据武器基础伤害、轻/重攻击类型和连击段数构建伤害 Spec
-- `GE_Shared_DealDamage` 通过 `UGE_ExecCalc_DamageTaken` 完成最终伤害计算
-- `URPGDemoAttributeSet` 将 `DamageTaken` 转换为 `CurrentHealth` 扣减
-- 敌人侧通过 Shared/Guardian HitReact 能力播放受击反应
-- Hero 命中反馈已接入 Hit Pause GameplayAbility 和近战 Camera Shake
-- Axe 命中和 Guardian 死亡音效通过 Gameplay Cue 播放
-- `DefaultGame.ini` 已配置 `/Game/GameplayCues` 扫描路径
-
-相关资产包括：
-
-- `Content/Shared/AnimNotifyState/ANS_ToggleWeaponCollision.uasset`
-- `Content/Shared/GameplayEffect/GE_Shared_DealDamage.uasset`
-- `Content/Shared/GameplayAbility/GA_Enemy_HitReact_Base.uasset`
-- `Content/PlayerCharacter/GameplayAbility/HitPause/GA_Hero_HitPause.uasset`
-- `Content/PlayerCharacter/GameplayAbility/HitPause/CameraShake_HeroMelee.uasset`
-- `Content/GameplayCues/GC_Hero_AxeHit.uasset`
-- `Content/GameplayCues/GC_Guardian_DeathSound.uasset`
-
-## UI 系统
-
-角色状态 UI 使用 C++ Component 和 Blueprint Widget 组合：
-
-- `IPawnUIInterface` 为角色提供统一的 UI Component 访问入口
-- `UPawnUIComponent` 广播生命值百分比变化
-- `UHeroUIComponent` 额外广播怒气百分比和装备武器图标变化
-- `UEnemyUIComponent` 为敌人状态 Widget 提供数据源
-- `URPGDemoWidgetBase` 在初始化时把 Hero/Enemy UI Component 传递给 Blueprint Widget
-- `URPGDemoAttributeSet` 在属性变化和伤害结算后广播 Health/Rage 百分比
-- 英雄装备数据通过 `SoftWeaponIconTexture` 配置武器图标
-
-当前 UI 资产包括：
-
-- `Content/Widgets/HeroWidgets/WBP_HeroOverlay.uasset`
-- `Content/Widgets/EnemyWidgets/WBP_DefaultEnemyHealthBar.uasset`
-- `Content/Widgets/TemplateWidgets/TPWBP_StatusBar.uasset`
-- `Content/Widgets/TemplateWidgets/TPWBP_IconSlot.uasset`
-- `Content/Widgets/TemplateWidgets/RPGDemoSizeBox.uasset`
-- `Content/Assets/Textures/UI/Material/MI_HeroHealthBar.uasset`
-
-## 敌人死亡
-
-当前敌人死亡链路：
-
-- `URPGDemoAttributeSet` 检测生命值归零并添加 `Shared.Status.Dead`
-- `GA_Enemy_Death_Base` 提供共享死亡能力流程
-- `GA_Guardian_Death` 负责 Guardian 的具体死亡表现
-- Guardian 使用独立死亡蒙太奇目录提供多种死亡动画
-- `GC_Guardian_DeathSound` 播放死亡音效
-- `BPI_EnemyDeath` 为 Blueprint 死亡事件提供接口
-
-相关资产包括：
-
-- `Content/Shared/GameplayAbility/GA_Enemy_Death_Base.uasset`
-- `Content/EnemyCharacter/BPI_EnemyDeath.uasset`
-- `Content/EnemyCharacter/Gruntling/GameplayAbility/GA_Guardian_Death.uasset`
-- `Content/EnemyCharacter/Gruntling/Montages/Death/`
-- `Content/GameplayCues/GC_Guardian_DeathSound.uasset`
-
-## 动画
-
-动画侧当前包含：
-
-- 基础 AnimInstance
-- 角色移动状态读取
-- Hero AnimInstance
-- Hero Linked Anim Layer
-- Axe 装备状态下的 BlendSpace 和 AnimLayer
-- Enemy 基础动画蓝图
-- Guardian 动画蓝图和默认 BlendSpace
-- Guardian 受击反应蒙太奇
-- Guardian 死亡蒙太奇
-- AnimNotify / AnimNotifyState 辅助资产
-
-相关目录：
-
-- `Content/PlayerCharacter/AnimBP/`
-- `Content/EnemyCharacter/ABP_Enemy_Base.uasset`
-- `Content/EnemyCharacter/Gruntling/AnimBP/`
-- `Content/EnemyCharacter/Gruntling/Montages/`
-- `Content/Shared/AnimNotify/`
-- `Content/Shared/AnimNotifyState/`
-
-## Gameplay Tags
-
-Native Gameplay Tags 当前覆盖：
-
-- 输入标签
-- 玩家能力标签
-- 玩家武器标签
-- 玩家事件标签
-- 玩家状态标签
-- 玩家 Hit Pause 和攻击类型 SetByCaller 标签
-- 共享能力、事件、状态和 SetByCaller 标签
-- 敌人能力标签
-- 敌人武器标签
-- Gameplay Cue 音效标签
-
-主要定义文件：
-
-- `Source/RPGDemo/Public/RPGDemoGameplayTags.h`
-- `Source/RPGDemo/Private/RPGDemoGameplayTags.cpp`
-
-当前新增的关键标签覆盖：
-
-- `Shared.Event.MeleeHit`
-- `Shared.Event.HitReact`
-- `Shared.SetByCaller.BaseDamage`
-- `Shared.Ability.Death`
-- `Shared.Status.Dead`
-- `Player.Event.HitPause`
-- `Player.Ability.HitPause`
-- `Player.SetByCaller.AttackType.Light`
-- `Player.SetByCaller.AttackType.Heavy`
-- `Shared.Ability.HitReact`
-- `GameplayCue.Sounds.MeleeHit.Axe`
-- `GameplayCue.Sounds.Death.Guardian`
-
-## 项目结构
+### 玩家攻击流程
 
 ```text
-RPGDemo.uproject              项目描述文件
-Config/                       项目、地图、输入、渲染和 GAS 配置
-Source/RPGDemo/               Runtime C++ 模块
-Content/Maps/                 当前功能开发地图
-Content/GameModes/            Blueprint GameMode
-Content/PlayerCharacter/      英雄角色、输入、能力、GE、动画和武器资产
-Content/EnemyCharacter/       敌人角色、敌人武器、Guardian 资产、受击和死亡资产
-Content/Shared/               通用 GameplayAbility、GameplayEffect 和动画通知资产
-Content/Widgets/              Hero/Enemy 状态 UI 和通用 Widget 模板
-Content/GameplayCues/         命中和死亡 Gameplay Cue
-Content/Assets/               导入的角色、敌人、武器、特效、UI、声音和动画资源
-Content/ThirdPerson/          第三人称模板原型资源
-Tools/                        项目辅助脚本
+Enhanced Input
+  -> Input Gameplay Tag
+  -> ASC 激活 Hero GameplayAbility
+  -> 播放攻击蒙太奇
+  -> AnimNotifyState 打开武器碰撞窗口
+  -> Weapon overlap 过滤敌对目标
+  -> CombatComponent 发送 MeleeHit / HitPause 事件
+  -> GameplayEffect ExecutionCalculation 计算伤害
+  -> AttributeSet 扣减生命值并广播 UI
+  -> HitReact / Death / Gameplay Cue / Camera Shake
 ```
 
-## 关键资产
+### 敌人战斗流程
 
-- 默认地图：`Content/Maps/FeatureDevMap.umap`
-- 默认 GameMode：`Content/GameModes/BP_BaseGameMode.uasset`
-- 英雄角色：`Content/PlayerCharacter/BP_HeroCharacter.uasset`
-- 英雄控制器：`Content/PlayerCharacter/BP_HeroController.uasset`
-- 英雄启动数据：`Content/PlayerCharacter/DA_Hero.uasset`
-- 英雄启动 GE：`Content/PlayerCharacter/GameplayEffect/GE_Hero_StartUp.uasset`
-- 输入配置：`Content/PlayerCharacter/DA_InputConfig.uasset`
-- 默认输入映射：`Content/PlayerCharacter/Input/IMC_Default.uasset`
-- Axe 输入映射：`Content/PlayerCharacter/Input/IMC_Axe.uasset`
-- Guardian 敌人：`Content/EnemyCharacter/Gruntling/BP_Gruntling_Guardian.uasset`
-- Guardian 启动数据：`Content/EnemyCharacter/Gruntling/DA_Guardian.uasset`
-- Guardian 启动 GE：`Content/EnemyCharacter/Gruntling/GameplayEffect/GE_Guardian_StartUp.uasset`
-- Guardian HitReact 能力：`Content/EnemyCharacter/Gruntling/GameplayAbility/GA_Guardian_HitReact.uasset`
-- Guardian 死亡能力：`Content/EnemyCharacter/Gruntling/GameplayAbility/GA_Guardian_Death.uasset`
-- 通用敌人死亡能力：`Content/Shared/GameplayAbility/GA_Enemy_Death_Base.uasset`
-- 共享伤害 GE：`Content/Shared/GameplayEffect/GE_Shared_DealDamage.uasset`
-- Hero Hit Pause 能力：`Content/PlayerCharacter/GameplayAbility/HitPause/GA_Hero_HitPause.uasset`
-- Hero 近战 Camera Shake：`Content/PlayerCharacter/GameplayAbility/HitPause/CameraShake_HeroMelee.uasset`
-- Hero Overlay：`Content/Widgets/HeroWidgets/WBP_HeroOverlay.uasset`
-- 敌人生命值条：`Content/Widgets/EnemyWidgets/WBP_DefaultEnemyHealthBar.uasset`
-- Hero Axe 命中 Gameplay Cue：`Content/GameplayCues/GC_Hero_AxeHit.uasset`
-- Guardian 死亡 Gameplay Cue：`Content/GameplayCues/GC_Guardian_DeathSound.uasset`
-- 武器碰撞窗口 ANS：`Content/Shared/AnimNotifyState/ANS_ToggleWeaponCollision.uasset`
-- Hero 武器数值表：`Content/PlayerCharacter/HeroWeapon/CT_HeroWeaponStats.uasset`
+```text
+AI Perception 感知目标
+  -> Blackboard 写入 TargetActor
+  -> Behavior Tree 选择追击、转向、走位或攻击
+  -> EQS 查询 Strafe 位置
+  -> BTTask / BTService 调整朝向和状态
+  -> 按 Gameplay Tag 激活敌人近战 Ability
+  -> 复用共享近战命中和伤害链路
+  -> 受击、死亡和 UI 反馈
+```
 
-## C++ 模块概览
+## 关键源码入口
 
-主要代码区域：
+```text
+Source/RPGDemo/Private/AbilitySystem/
+  自定义 ASC、AttributeSet、GameplayAbility 基类、伤害 ExecutionCalculation
 
-- `Characters/`：基础角色、英雄角色、敌人角色
-- `AbilitySystem/`：AttributeSet、AbilitySystemComponent、GameplayAbility 基类、Hero/Enemy Ability 基类
-- `AbilitySystem/GE_ExecCalc/`：GAS 自定义伤害执行计算
-- `Components/Input/`：Enhanced Input 绑定辅助组件
-- `Components/Combat/`：Pawn、Hero、Enemy 战斗组件
-- `Components/UI/`：Pawn、Hero、Enemy UI 数据和委托组件
-- `Interfaces/`：角色战斗组件和 UI 组件访问接口
-- `Items/Weapons/`：基础武器和英雄武器类
-- `DataAssets/`：输入配置和角色启动数据
-- `AnimInstances/`：基础动画实例、角色动画实例、Hero 动画实例和 Linked Anim Layer
-- `Controllers/`：Hero PlayerController
-- `GameModes/`：基础 GameMode
-- `RPGDemoTypes/`：项目通用枚举和结构体
-- `RPGDemoGameplayTags`：Native Gameplay Tag 声明和定义
-- `RPGDemoFunctionLibrary`：项目通用 Blueprint/C++ 辅助函数
-- `Widgets/`：C++ UserWidget 基类和 UI Component 初始化桥接
+Source/RPGDemo/Private/Components/Combat/
+  Pawn/Hero/Enemy CombatComponent，武器注册、碰撞窗口、命中事件派发
 
-## 打开项目
+Source/RPGDemo/Private/Components/Input/
+  Enhanced Input 与 Gameplay Tag 绑定封装
+
+Source/RPGDemo/Private/Components/UI/
+  角色 UI 数据组件和属性变化委托
+
+Source/RPGDemo/Private/AI/
+  原生 Behavior Tree Task / Service
+
+Source/RPGDemo/Private/Controllers/RPGDemoAIController.cpp
+  AI 感知、队伍关系、Detour Crowd Avoidance 配置
+
+Source/RPGDemo/Private/Items/Weapons/
+  武器基础 Actor、碰撞盒和命中委托
+
+Source/RPGDemo/Private/RPGDemoGameplayTags.cpp
+  Native Gameplay Tag 定义
+```
+
+## 关键内容资产
+
+```text
+Content/PlayerCharacter/
+  Hero 角色、输入、Ability、GameplayEffect、动画、武器和 UI 数据
+
+Content/EnemyCharacter/
+  Enemy 基类资产、Guardian 敌人、行为树、EQS、受击、攻击和死亡资产
+
+Content/Shared/
+  通用 GameplayAbility、GameplayEffect、AnimNotify 和 AnimNotifyState
+
+Content/GameplayCues/
+  命中和死亡 Gameplay Cue
+
+Content/Widgets/
+  Hero Overlay、敌人生命值条和通用状态栏模板
+
+Content/Maps/FeatureDevMap.umap
+  当前功能开发和演示地图
+```
+
+## 运行项目
 
 1. 安装 Unreal Engine 5.4。
-2. 安装 Git LFS，并确保已拉取二进制资产。
+2. 安装 Git LFS，并拉取二进制资产。
 3. 打开 `RPGDemo.uproject`。
-4. 如果 Visual Studio 项目文件缺失或过期，从 `.uproject` 重新生成项目文件。
-5. 编译 `RPGDemoEditor` 目标。
+4. 如项目文件过期，从 `.uproject` 重新生成 IDE 项目文件。
+5. 编译 `RPGDemoEditor` 目标后打开默认地图运行。
 
-新机器首次使用仓库前，先执行：
+首次拉取仓库后建议执行：
 
 ```powershell
 git lfs install
 git lfs pull
 ```
 
-## Git 说明
+Windows 下当前配置以 Desktop / DX12 / SM6 为主。IDE 可使用 Visual Studio 或 Rider；Visual Studio 所需组件可参考 `.vsconfig`。
 
-本仓库按 Unreal Engine 项目配置版本管理规则：
+## 版本管理说明
 
-- `Binaries/`、`Intermediate/`、`Saved/`、`DerivedDataCache/`、`.vs/` 等生成目录会被忽略。
-- Unreal 二进制资产通过 Git LFS 跟踪。
-- `RPGDemo.sln` 可以重新生成，不作为核心源文件依赖。
-- 建议纳入版本管理的核心内容包括：`Config/`、`Source/`、`Content/`、`RPGDemo.uproject`、`.gitignore`、`.gitattributes`、`.editorconfig`。
+仓库按 Unreal Engine 项目规则组织版本管理：
+
+- `Config/`、`Source/`、`Content/`、`RPGDemo.uproject` 是核心工程内容。
+- `.uasset`、`.umap` 等二进制资源通过 Git LFS 跟踪。
+- `Binaries/`、`Intermediate/`、`Saved/`、`DerivedDataCache/`、`.vs/`、`.idea/`、RiderLink 等本地生成内容不纳入版本管理。
+- IDE 工程文件和本地缓存可以重新生成，不应作为理解项目架构的主要入口。
 
 ## 当前状态
 
-项目仍处于原型开发阶段。当前主要完成了 Hero 输入到能力的基础管线、GAS Attribute/GameplayEffect 启动流程、武器生成和装备基础、Hero/Enemy 战斗组件骨架、近战命中检测、伤害计算、血量扣减、Hit Pause/Camera Shake/Gameplay Cue 战斗反馈、Guardian 受击与死亡流程，以及 Hero Overlay、角色状态栏、装备武器图标和敌人头顶生命值条。
+项目处于功能 Demo 和架构验证阶段，已经完成 Hero 战斗、GAS 属性和伤害管线、武器生成与碰撞命中、UI 状态同步、Guardian 敌人 AI、EQS 走位、敌人近战 Ability、受击与死亡反馈等核心链路。
+
+后续可继续扩展的方向包括：更多武器类型、格挡和破防、敌人技能组合、更多敌人 Archetype、Boss 行为、数值表完善、UI 菜单流程、存档和关卡目标系统。
