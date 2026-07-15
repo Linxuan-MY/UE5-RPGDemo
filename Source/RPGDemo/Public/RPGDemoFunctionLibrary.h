@@ -7,13 +7,15 @@
 #include "RPGDemoTypes/RPGDemoEnumTypes.h"
 #include "RPGDemoFunctionLibrary.generated.h"
 
+struct FGameplayTag;
 class URPGDemoAbilitySystemComponent;
 class UPawnCombatComponent;
+struct FScalableFloat;
 
 
 
 /**
- * 
+ *
  */
 UCLASS()
 class RPGDEMO_API URPGDemoFunctionLibrary : public UBlueprintFunctionLibrary
@@ -41,5 +43,11 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "RPGDemo|FunctionLibrary")
 	static bool TargetPawnHostile(APawn* QueryPawn, APawn* TargetPawn);
-	
+
+	UFUNCTION(BlueprintPure, Category = "RPGDemo|FunctionLibrary", meta = (CompactNodeTitle = "Get Value At Level"))
+	static float GetScalableFloatValueAtLevel(const FScalableFloat& InScalableFloat, float InLevel = 1.f);
+
+	UFUNCTION(BlueprintPure, Category = "RPGDemo|FunctionLibrary")
+	static FGameplayTag ComputeHitReactDirectionTag(AActor* InAttacker, AActor* InVictim, float& OutAngleDiff);
+
 };

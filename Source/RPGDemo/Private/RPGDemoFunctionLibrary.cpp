@@ -6,6 +6,8 @@
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 #include "Interfaces/PawnCombatInterface.h"
 #include "GenericTeamAgentInterface.h"
+#include "Kismet/KismetMathLibrary.h"
+#include "RPGDemoGameplayTags.h"
 
 URPGDemoAbilitySystemComponent* URPGDemoFunctionLibrary::NativeGetRPGDemoASCFromActor(AActor* InActor)
 {
@@ -81,4 +83,51 @@ bool URPGDemoFunctionLibrary::TargetPawnHostile(APawn* QueryPawn, APawn* TargetP
 	}
 
 	return false;
+}
+
+float URPGDemoFunctionLibrary::GetScalableFloatValueAtLevel(const FScalableFloat& InScalableFloat, float InLevel)
+{
+	return InScalableFloat.GetValueAtLevel(InLevel);
+}
+
+FGameplayTag URPGDemoFunctionLibrary::ComputeHitReactDirectionTag(AActor* InAttacker, AActor* InVictim,
+	float& OutAngleDiff)
+{
+	check(InAttacker);
+	check(InVictim);
+
+	const FVector AttackerLocation = InAttacker->GetActorLocation();
+	const FVector VictimLocation = InVictim->GetActorLocation();
+
+	const FVector VictimForward = InVictim->GetActorForwardVector();
+	const FVector VictimToAttackerNormalized = (AttackerLocation - VictimLocation).GetSafeNormal();
+
+	const float DotResult = FVector::DotProduct(VictimForward, VictimToAttackerNormalized);
+	OutAngleDiff = UKismetMathLibrary::DegAcos(DotResult);
+
+	const FVector CrossResult = FVector::CrossProduct(VictimForward, VictimToAttackerNormalized);
+
+	if (CrossResult.Z < 0.0f)
+	{
+		OutAngleDiff = -OutAngleDiff;
+	}
+
+	if (OutAngleDiff <= 45.0f && OutAngleDiff >= -45.0f)
+	{
+		return RPGDemoGameplayTags::Shared_Status_HitReact_Front;
+	}
+	else if (OutAngleDiff < -45.f && OutAngleDiff >= -135.f)
+	{
+		return RPGDemoGameplayTags::Shared_Status_HitReact_Left;
+	}
+	else if (OutAngleDiff > 135.f || OutAngleDiff < -135.f)
+	{
+		return RPGDemoGameplayTags::Shared_Status_HitReact_Back;
+	}
+	else if (OutAngleDiff > 45.f && OutAngleDiff <= 135.f)
+	{
+		return RPGDemoGameplayTags::Shared_Status_HitReact_Right;
+	}
+
+	return RPGDemoGameplayTags::Shared_Status_HitReact_Front;
 }

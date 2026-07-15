@@ -67,6 +67,7 @@ void URPGDemoAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCal
 
 		PawnUIComponent->OnCurrentHealthChanged.Broadcast(NewCurrentHealth / GetMaxHealth());
 
+		/*
 		const FString DebugString = FString::Printf(
 			TEXT("Damage Taken: %f, Old Health: %f, New Health: %f"),
 			DamageDone,
@@ -74,7 +75,9 @@ void URPGDemoAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCal
 			NewCurrentHealth
 		);
 
+
 		Debug::Print(DebugString, FColor::Green);
+		*/
 
 		if (GetCurrentHealth() == 0.f)
 		{
