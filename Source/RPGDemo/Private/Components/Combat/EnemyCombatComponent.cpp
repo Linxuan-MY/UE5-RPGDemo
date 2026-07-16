@@ -4,6 +4,7 @@
 #include "Components/Combat/EnemyCombatComponent.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "RPGDemoGameplayTags.h"
+#include "RPGDemoFunctionLibrary.h"
 
 #include "RPGDemoDebugHelper.h"
 
@@ -18,12 +19,12 @@ void UEnemyCombatComponent::OnHitTargetActor(AActor* HitActor)
 
 	bool bIsValidBlock = false;
 
-	const bool bIsPlayerBlocking = false;
+	const bool bIsPlayerBlocking = URPGDemoFunctionLibrary::NativeDoesActorHaveTag(HitActor, RPGDemoGameplayTags::Player_Status_Block);
 	const bool bIsMyAttackUnblockable = false;
 
 	if(bIsPlayerBlocking && !bIsMyAttackUnblockable)
 	{
-		bIsValidBlock = true;
+		bIsValidBlock = URPGDemoFunctionLibrary::IsValidBlock(GetOwningPawn(), HitActor);
 	}
 
 	FGameplayEventData EventData;
@@ -32,7 +33,11 @@ void UEnemyCombatComponent::OnHitTargetActor(AActor* HitActor)
 
 	if (bIsValidBlock)
 	{
-
+		UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
+			HitActor,
+			RPGDemoGameplayTags::Player_Event_SuccessfulBlock,
+			EventData
+		);
 	}
 	else
 	{

@@ -3,6 +3,7 @@
 
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 #include "AbilitySystem/Abilities/RPGDemoHeroGameplayAbility.h"
+#include "RPGDemoGameplayTags.h"
 
 void URPGDemoAbilitySystemComponent::OnAbilityInputPressed(const FGameplayTag InInputTag)
 {
@@ -11,14 +12,22 @@ void URPGDemoAbilitySystemComponent::OnAbilityInputPressed(const FGameplayTag In
 	for (const FGameplayAbilitySpec& AbilitySpec : GetActivatableAbilities())
 	{
 		if (!AbilitySpec.DynamicAbilityTags.HasTagExact(InInputTag)) continue;
-		
+
 		TryActivateAbility(AbilitySpec.Handle);
 	}
 }
 
 void URPGDemoAbilitySystemComponent::OnAbilityInputReleased(const FGameplayTag InInputTag)
 {
+	if (!InInputTag.IsValid() || !InInputTag.MatchesTag(RPGDemoGameplayTags::InputTag_MustBeHeld)) return;
 
+	for (const FGameplayAbilitySpec& Spec : GetActivatableAbilities())
+	{
+		if (Spec.DynamicAbilityTags.HasTagExact(InInputTag) && Spec.IsActive())
+		{
+			CancelAbilityHandle(Spec.Handle);
+		}
+	}
 }
 
 void URPGDemoAbilitySystemComponent::GrantHeroWeaponAbilities(const TArray<FRPGDemoHeroAbilitySet>& InDefaultWeaponAbilities, int32 ApplyLevel, TArray<FGameplayAbilitySpecHandle>& OutGrantedAbilitySpecHandles)

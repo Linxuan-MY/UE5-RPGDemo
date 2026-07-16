@@ -131,3 +131,13 @@ FGameplayTag URPGDemoFunctionLibrary::ComputeHitReactDirectionTag(AActor* InAtta
 
 	return RPGDemoGameplayTags::Shared_Status_HitReact_Front;
 }
+
+bool URPGDemoFunctionLibrary::IsValidBlock(AActor* InAttacker, AActor* InVictim)
+{
+	check(InAttacker);
+	check(InVictim);
+
+	const float DotResult = FVector::DotProduct(InAttacker->GetActorForwardVector(), InVictim->GetActorForwardVector());
+
+	return DotResult < -0.1f;
+}

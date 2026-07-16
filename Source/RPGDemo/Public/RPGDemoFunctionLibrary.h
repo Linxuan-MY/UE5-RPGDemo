@@ -50,4 +50,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "RPGDemo|FunctionLibrary")
 	static FGameplayTag ComputeHitReactDirectionTag(AActor* InAttacker, AActor* InVictim, float& OutAngleDiff);
 
+	UFUNCTION(BlueprintPure, Category = "RPGDemo|FunctionLibrary")
+	static bool IsValidBlock(AActor* InAttacker, AActor* InVictim);
+
 };

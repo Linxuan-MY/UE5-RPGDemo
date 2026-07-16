@@ -84,7 +84,7 @@ void ARPGDemoHeroCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 	ULocalPlayer* LocalPlayer = GetController<APlayerController>()->GetLocalPlayer();
 
 	UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer);
-	
+
 	check(Subsystem);
 
 	Subsystem->AddMappingContext(InputConfigDataAsset->DefaultMappingContext, 0);
@@ -101,7 +101,7 @@ void ARPGDemoHeroCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 void ARPGDemoHeroCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
 }
 
 void ARPGDemoHeroCharacter::Input_Move(const FInputActionValue& InputActionValue)
