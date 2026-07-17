@@ -14,6 +14,7 @@
 #include "DataAssets/StartUpData/DataAsset_HeroStartUpData.h"
 #include "Components/Combat/HeroCombatComponent.h"
 #include "Components/UI/HeroUIComponent.h"
+#include "AbilitySystemBlueprintLibrary.h"
 
 #include "RPGDemoDebugHelper.h"
 
@@ -94,6 +95,9 @@ void ARPGDemoHeroCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 	RPGDemoInputComponent->BindNativeInputAction(InputConfigDataAsset, RPGDemoGameplayTags::InputTag_Move, ETriggerEvent::Triggered, this, &ThisClass::Input_Move);
 	RPGDemoInputComponent->BindNativeInputAction(InputConfigDataAsset, RPGDemoGameplayTags::InputTag_Look, ETriggerEvent::Triggered, this, &ThisClass::Input_Look);
 
+	RPGDemoInputComponent->BindNativeInputAction(InputConfigDataAsset, RPGDemoGameplayTags::InputTag_SwitchTarget, ETriggerEvent::Triggered, this, &ThisClass::Input_SwitchTargetTriggered);
+	RPGDemoInputComponent->BindNativeInputAction(InputConfigDataAsset, RPGDemoGameplayTags::InputTag_SwitchTarget, ETriggerEvent::Completed, this, &ThisClass::Input_SwitchTargetCompleted);
+
 	RPGDemoInputComponent->BindAbilityInputAction(InputConfigDataAsset, this, &ThisClass::Input_AbilityInputPressed, &ThisClass::Input_AbilityInputReleased);
 }
 
@@ -141,6 +145,21 @@ void ARPGDemoHeroCharacter::Input_Look(const FInputActionValue& InputActionValue
 		AddControllerPitchInput(LookAxisVector.Y);
 	}
 
+}
+
+void ARPGDemoHeroCharacter::Input_SwitchTargetTriggered(const FInputActionValue& InputActionValue)
+{
+	SwitchDirection = InputActionValue.Get<FVector2D>();
+}
+
+void ARPGDemoHeroCharacter::Input_SwitchTargetCompleted(const FInputActionValue& InputActionValue)
+{
+	FGameplayEventData Data;
+	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
+		this,
+		SwitchDirection.X > 0.f ? RPGDemoGameplayTags::Player_Event_SwitchTarget_Right : RPGDemoGameplayTags::Player_Event_SwitchTarget_Left,
+		Data
+		);
 }
 
 void ARPGDemoHeroCharacter::Input_AbilityInputPressed(FGameplayTag InInputTag)
