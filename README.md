@@ -2,7 +2,7 @@
 
 RPGDemo 是一个基于 Unreal Engine 5.4 的第三人称动作 RPG 技术 Demo。项目重点不是堆叠完整游戏内容，而是验证一套可以扩展的动作 RPG Gameplay 架构：用 C++ 承担核心运行时框架，用 Blueprint 和数据资产承载角色、能力、动画、AI 行为和反馈表现。
 
-当前 Demo 已形成一条可体验的玩法闭环：玩家角色使用斧类武器进行轻攻击和重攻击，敌人通过感知系统进入追击、转向、走位、近战攻击、受击反馈和死亡流程，战斗结果同步驱动 UI、动画、Hit Pause、Camera Shake 和 Gameplay Cue。
+当前 Demo 已形成一条可体验的玩法闭环：玩家角色使用斧类武器进行轻攻击和重攻击，敌人通过感知系统进入追击、转向、走位、近战攻击或远程投射物攻击、受击反馈和死亡流程，战斗结果同步驱动 UI、动画、Hit Pause、Camera Shake 和 Gameplay Cue。
 
 ## 技术栈
 
@@ -34,11 +34,17 @@ RPGDemo 是一个基于 Unreal Engine 5.4 的第三人称动作 RPG 技术 Demo�
 
 命中发生后，CombatComponent 会过滤重复命中目标，并向拥有者发送 `Shared.Event.MeleeHit`。Hero 侧还会额外发送 `Player.Event.HitPause`，用于驱动命中停顿和镜头反馈。最终伤害由共享 GameplayEffect 结算，敌人受击和死亡再由响应型 Ability 处理。这样的链路让“攻击输入、动画窗口、碰撞命中、伤害计算、反馈表现”保持清晰边界。
 
+### 远程敌人与投射物链路
+
+新增的 Glacer 敌人扩展了敌人 Ability 体系中的远程攻击分支。行为树可以通过距离和位置查询选择射击节奏，配合 `EQS_FindShootProjectileLocation` 寻找更合适的发射位置，再由 `GA_Glacer_Projectile` 驱动施法蒙太奇、攻击预警和投射物生成。
+
+投射物使用 C++ 基类 `ARPGDemoProjectileBase` 承担通用飞行、碰撞和伤害派发逻辑。投射物支持 OnHit 与 OnBeginOverlap 两种伤害策略：Glacer 的投射物采用 Overlap 模式，对同阵营 Pawn 只穿透不结算，对玩家这类敌对 Pawn 才触发格挡判断、伤害 GameplayEffect、HitReact 和命中特效；对世界物体仍保留阻挡命中表现。
+
 ### 敌人 AI 行为闭环
 
 敌人侧已经接入基础 AI 行为链路。`ARPGDemoAIController` 使用 AI Perception 进行视野感知，并通过 Generic Team Id 区分敌我关系；路径跟随使用 `UCrowdFollowingComponent`，并在项目配置中启用 CrowdManager 避障参数。
 
-Behavior Tree 和 Blackboard 负责组织 Guardian 的战斗状态。项目中包含原生 BTTask / BTService，用于面向目标旋转和持续朝向目标；蓝图行为树资产进一步组织追击、距离检测、EQS 走位、Strafe 状态切换、按标签激活敌人 Ability、以及攻击目标更新。敌人近战攻击同样复用共享命中事件和伤害 GameplayEffect，因此玩家与敌人的战斗流程不是两套割裂实现。
+Behavior Tree 和 Blackboard 负责组织 Guardian 与 Glacer 的战斗状态。项目中包含原生 BTTask / BTService，用于面向目标旋转和持续朝向目标；蓝图行为树资产进一步组织追击、距离检测、EQS 走位、Strafe 状态切换、按标签激活敌人 Ability、以及攻击目标更新。敌人近战攻击同样复用共享命中事件和伤害 GameplayEffect，远程攻击复用共享投射物事件和伤害 GameplayEffect，因此玩家与敌人的战斗流程不是两套割裂实现。
 
 ### UI 与反馈事件流
 
@@ -61,8 +67,10 @@ UI 数据不直接散落在角色或 Widget 蓝图中，而是通过 `PawnUIComp
 - Hero 生命值、怒气和装备武器图标 UI
 - Enemy 头顶生命值条
 - Guardian 敌人感知玩家、追击、转向、走位、近战攻击
+- Glacer 敌人感知玩家、选择射击位置、施法并发射投射物
 - Guardian 受击反应、死亡 Ability、死亡蒙太奇和死亡音效
 - EQS Strafe 走位、敌人近战 Ability 随行为树激活
+- CombatTestMap 战斗测试地图，用于验证敌人组合、远程投射物和战斗行为
 
 默认地图为 `/Game/Maps/FeatureDevMap`，默认 GameMode 为 `/Game/GameModes/BP_BaseGameMode`。
 
@@ -96,6 +104,19 @@ AI Perception 感知目标
   -> 受击、死亡和 UI 反馈
 ```
 
+### 敌人远程投射物流程
+
+```text
+AI Perception 感知目标
+  -> Behavior Tree 判断射击时机和射击位置
+  -> EQS 查询可用发射位置
+  -> 按 Gameplay Tag 激活敌人远程 Ability
+  -> 施法蒙太奇发送 SpawnProjectile 事件
+  -> Projectile overlap 过滤敌我目标
+  -> 命中玩家后执行格挡判断或应用伤害
+  -> HitReact / Gameplay Cue / 命中特效
+```
+
 ## 关键源码入口
 
 ```text
@@ -120,6 +141,9 @@ Source/RPGDemo/Private/Controllers/RPGDemoAIController.cpp
 Source/RPGDemo/Private/Items/Weapons/
   武器基础 Actor、碰撞盒和命中委托
 
+Source/RPGDemo/Private/Items/RPGDemoProjectileBase.cpp
+  投射物基础 Actor、飞行组件、命中/重叠策略和伤害派发
+
 Source/RPGDemo/Private/RPGDemoGameplayTags.cpp
   Native Gameplay Tag 定义
 ```
@@ -131,19 +155,22 @@ Content/PlayerCharacter/
   Hero 角色、输入、Ability、GameplayEffect、动画、武器和 UI 数据
 
 Content/EnemyCharacter/
-  Enemy 基类资产、Guardian 敌人、行为树、EQS、受击、攻击和死亡资产
+  Enemy 基类资产、Guardian 与 Glacer 敌人、行为树、EQS、受击、攻击、投射物和死亡资产
 
 Content/Shared/
-  通用 GameplayAbility、GameplayEffect、AnimNotify 和 AnimNotifyState
+  通用 GameplayAbility、GameplayEffect、投射物蓝图、AnimNotify 和 AnimNotifyState
 
 Content/GameplayCues/
-  命中和死亡 Gameplay Cue
+  命中、死亡和敌人攻击预警 Gameplay Cue
 
 Content/Widgets/
   Hero Overlay、敌人生命值条和通用状态栏模板
 
 Content/Maps/FeatureDevMap.umap
   当前功能开发和演示地图
+
+Content/Maps/CombatTestMap.umap
+  战斗测试地图，用于集中验证敌人行为和投射物链路
 ```
 
 ## 运行项目
@@ -174,6 +201,6 @@ Windows 下当前配置以 Desktop / DX12 / SM6 为主。IDE 可使用 Visual St
 
 ## 当前状态
 
-项目处于功能 Demo 和架构验证阶段，已经完成 Hero 战斗、GAS 属性和伤害管线、武器生成与碰撞命中、UI 状态同步、Guardian 敌人 AI、EQS 走位、敌人近战 Ability、受击与死亡反馈等核心链路。
+项目处于功能 Demo 和架构验证阶段，已经完成 Hero 战斗、GAS 属性和伤害管线、武器生成与碰撞命中、UI 状态同步、Guardian 近战敌人 AI、Glacer 远程敌人 AI、EQS 走位、敌人近战与远程 Ability、投射物命中过滤、受击与死亡反馈等核心链路。
 
 后续可继续扩展的方向包括：更多武器类型、格挡和破防、敌人技能组合、更多敌人 Archetype、Boss 行为、数值表完善、UI 菜单流程、存档和关卡目标系统。
