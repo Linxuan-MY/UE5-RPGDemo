@@ -20,7 +20,7 @@ void UEnemyCombatComponent::OnHitTargetActor(AActor* HitActor)
 	bool bIsValidBlock = false;
 
 	const bool bIsPlayerBlocking = URPGDemoFunctionLibrary::NativeDoesActorHaveTag(HitActor, RPGDemoGameplayTags::Player_Status_Block);
-	const bool bIsMyAttackUnblockable = false;
+	const bool bIsMyAttackUnblockable = URPGDemoFunctionLibrary::NativeDoesActorHaveTag(GetOwningPawn(), RPGDemoGameplayTags::Enemy_Status_Unblockable);
 
 	if(bIsPlayerBlocking && !bIsMyAttackUnblockable)
 	{

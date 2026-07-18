@@ -141,3 +141,14 @@ bool URPGDemoFunctionLibrary::IsValidBlock(AActor* InAttacker, AActor* InVictim)
 
 	return DotResult < -0.1f;
 }
+
+bool URPGDemoFunctionLibrary::ApplyGameplayEffectSpecHandleToTargetActor(AActor* InInstigator, AActor* InTargetActor,
+	const FGameplayEffectSpecHandle& InSpecHandle)
+{
+	URPGDemoAbilitySystemComponent* SourceASC = NativeGetRPGDemoASCFromActor(InInstigator);
+	URPGDemoAbilitySystemComponent* TargetASC = NativeGetRPGDemoASCFromActor(InTargetActor);
+
+	FActiveGameplayEffectHandle ActiveGameplayEffectHandle = SourceASC->ApplyGameplayEffectSpecToTarget(*InSpecHandle.Data, TargetASC);
+
+	return ActiveGameplayEffectHandle.WasSuccessfullyApplied();
+}

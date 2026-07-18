@@ -7,6 +7,7 @@
 #include "RPGDemoTypes/RPGDemoEnumTypes.h"
 #include "RPGDemoFunctionLibrary.generated.h"
 
+struct FGameplayEffectSpecHandle;
 struct FGameplayTag;
 class URPGDemoAbilitySystemComponent;
 class UPawnCombatComponent;
@@ -52,5 +53,8 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "RPGDemo|FunctionLibrary")
 	static bool IsValidBlock(AActor* InAttacker, AActor* InVictim);
+
+	UFUNCTION(BlueprintCallable, Category = "RPGDemo|FunctionLibrary")
+	static bool ApplyGameplayEffectSpecHandleToTargetActor(AActor* InInstigator, AActor* InTargetActor, const FGameplayEffectSpecHandle& InSpecHandle);
 
 };

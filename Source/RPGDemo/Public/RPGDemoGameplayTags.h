@@ -58,6 +58,7 @@ namespace RPGDemoGameplayTags
 
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Enemy_Status_Strafe);
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Enemy_Status_UnderAttack);
+	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Enemy_Status_Unblockable);
 
 	/** Shared Tags **/
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Ability_HitReact);
@@ -65,6 +66,7 @@ namespace RPGDemoGameplayTags
 
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Event_MeleeHit);
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Event_HitReact);
+	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Event_SpawnProjectile);
 
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_SetByCaller_BaseDamage);
 
