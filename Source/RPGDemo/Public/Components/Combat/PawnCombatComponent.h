@@ -18,7 +18,7 @@ enum class EToggleDamageType : uint8
 };
 
 /**
- * 
+ *
  */
 UCLASS()
 class RPGDEMO_API UPawnCombatComponent : public UPawnExtensionComponentBase
@@ -45,10 +45,13 @@ public:
 	virtual void OnWeaponPulledFromTargetActor(AActor* InteractedActor);
 
 protected:
+	virtual void ToggleCurrentEquippedWeaponCollision(bool bShouldEnable);
+	virtual void ToggleBodyCollision(bool bShouldEnable, EToggleDamageType ToggleDamageType);
+
 	TArray<AActor*> OverlappedActors;
 
 private:
 	TMap<FGameplayTag, ARPGDemoWeaponBase*> CharacterCarriedWeaponMap;
 
-	
+
 };

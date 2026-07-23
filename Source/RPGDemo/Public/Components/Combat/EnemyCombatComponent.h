@@ -7,7 +7,7 @@
 #include "EnemyCombatComponent.generated.h"
 
 /**
- * 
+ *
  */
 UCLASS()
 class RPGDEMO_API UEnemyCombatComponent : public UPawnCombatComponent
@@ -16,5 +16,8 @@ class RPGDEMO_API UEnemyCombatComponent : public UPawnCombatComponent
 
 public:
 	virtual void OnHitTargetActor(AActor* HitActor) override;
+
+protected:
+	virtual void ToggleBodyCollision(bool bShouldEnable, EToggleDamageType ToggleDamageType) override;
 
 };
