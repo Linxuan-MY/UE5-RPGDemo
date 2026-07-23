@@ -57,6 +57,9 @@ Desktop.ini
 # Personal Unreal content
 /Content/Developers/
 
+# Isolated feature worktrees
+/.worktrees/
+
 # Do not commit packaged builds unless intentionally versioning a release
 /Package/
 /Packages/
