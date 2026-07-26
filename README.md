@@ -72,7 +72,7 @@ UI 数据不直接散落在角色或 Widget 蓝图中，而是通过 `PawnUIComp
 - EQS Strafe 走位、敌人近战 Ability 随行为树激活
 - CombatTestMap 战斗测试地图，用于验证敌人组合、远程投射物和战斗行为
 
-默认地图为 `/Game/Maps/FeatureDevMap`，默认 GameMode 为 `/Game/GameModes/BP_BaseGameMode`。
+默认地图为 `/Game/Maps/CombatTestMap`，默认 GameMode 为 `/Game/GameModes/BP_BaseGameMode`。
 
 ## 核心流程
 
