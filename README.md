@@ -2,7 +2,7 @@
 
 RPGDemo 是一个基于 Unreal Engine 5.4 的第三人称动作 RPG 技术 Demo。项目重点不是堆叠完整游戏内容，而是验证一套可以扩展的动作 RPG Gameplay 架构：用 C++ 承担核心运行时框架，用 Blueprint 和数据资产承载角色、能力、动画、AI 行为和反馈表现。
 
-当前 Demo 已形成一条可体验的玩法闭环：玩家角色使用斧类武器进行轻攻击和重攻击，敌人通过感知系统进入追击、转向、走位、近战攻击或远程投射物攻击、受击反馈和死亡流程，战斗结果同步驱动 UI、动画、Hit Pause、Camera Shake 和 Gameplay Cue。
+当前 Demo 已形成一条可体验的玩法闭环：玩家角色使用斧类武器进行轻攻击和重攻击，Guardian 与 Glacer 分别验证近战和远程敌人行为，Frost Giant Boss 进一步加入多段近战、血量阶段判断、召唤援军和 Boss UI。战斗结果会同步驱动动画、UI、Hit Pause、Camera Shake 和 Gameplay Cue。
 
 ## 技术栈
 
@@ -13,6 +13,8 @@ RPGDemo 是一个基于 Unreal Engine 5.4 的第三人称动作 RPG 技术 Demo�
 - Gameplay Tags
 - AI Perception、Behavior Tree、Blackboard、EQS
 - Detour Crowd Avoidance
+- Asset Manager / StreamableManager 异步资源加载
+- Navigation System
 - Motion Warping
 - UMG
 - Blueprint Data Assets、Animation Blueprint、Anim Notify / Anim Notify State
@@ -40,21 +42,29 @@ RPGDemo 是一个基于 Unreal Engine 5.4 的第三人称动作 RPG 技术 Demo�
 
 投射物使用 C++ 基类 `ARPGDemoProjectileBase` 承担通用飞行、碰撞和伤害派发逻辑。投射物支持 OnHit 与 OnBeginOverlap 两种伤害策略：Glacer 的投射物采用 Overlap 模式，对同阵营 Pawn 只穿透不结算，对玩家这类敌对 Pawn 才触发格挡判断、伤害 GameplayEffect、HitReact 和命中特效；对世界物体仍保留阻挡命中表现。
 
+### Frost Giant Boss 与异步召唤链路
+
+Frost Giant 在共享敌人战斗框架上扩展了 Boss 行为。角色左右手分别挂载伤害碰撞盒，攻击蒙太奇通过统一的 `ToggleWeaponCollision` 接口选择武器、左手或右手伤害窗口，使徒手攻击和持械攻击可以复用同一套重复命中过滤、格挡判断、Gameplay Event 与伤害结算链路。Boss 资产中配置了多组近战 Ability、连击蒙太奇、受击、死亡和专用死亡音效。
+
+召唤能力通过 `Enemy.Ability.Summon` 和 `Enemy.Event.Summon` 与行为树、动画事件解耦。共享的 `GA_Enemy_SpawnEnemies` 使用原生 `UAbilityTask_WaitSpawnEnemies` 等待 Gameplay Event，再通过 `TSoftClassPtr` 异步加载敌人类；加载完成后，它会在 Boss 周围的 NavMesh 可达范围内随机选择位置、生成指定数量的敌人，并分别广播成功或失败结果。
+
+`BTDecorator_CheckCurrentHealthPercent` 配合可配置的比较操作，根据当前生命值百分比控制行为树分支，让 Frost Giant 能在合适的血量阶段触发召唤，而无需把阶段判断硬编码进具体 Ability。`UEnemyUIComponent` 同时负责登记和清理敌人动态创建的 Widget，Boss 进入战斗时可以显示专用血条，并在流程结束时统一移除。
+
 ### 敌人 AI 行为闭环
 
 敌人侧已经接入基础 AI 行为链路。`ARPGDemoAIController` 使用 AI Perception 进行视野感知，并通过 Generic Team Id 区分敌我关系；路径跟随使用 `UCrowdFollowingComponent`，并在项目配置中启用 CrowdManager 避障参数。
 
-Behavior Tree 和 Blackboard 负责组织 Guardian 与 Glacer 的战斗状态。项目中包含原生 BTTask / BTService，用于面向目标旋转和持续朝向目标；蓝图行为树资产进一步组织追击、距离检测、EQS 走位、Strafe 状态切换、按标签激活敌人 Ability、以及攻击目标更新。敌人近战攻击同样复用共享命中事件和伤害 GameplayEffect，远程攻击复用共享投射物事件和伤害 GameplayEffect，因此玩家与敌人的战斗流程不是两套割裂实现。
+Behavior Tree 和 Blackboard 负责组织 Guardian、Glacer 与 Frost Giant 的战斗状态。项目中包含原生 BTTask / BTService，用于面向目标旋转和持续朝向目标；蓝图行为树资产进一步组织追击、距离检测、EQS 走位、Strafe 状态切换、血量阶段判断、按标签激活敌人 Ability，以及攻击目标更新。敌人近战攻击复用共享命中事件和伤害 GameplayEffect，远程攻击复用共享投射物事件和伤害 GameplayEffect，Boss 召唤则复用共享生成 Ability 和原生异步 AbilityTask。
 
 ### UI 与反馈事件流
 
-UI 数据不直接散落在角色或 Widget 蓝图中，而是通过 `PawnUIComponent`、`HeroUIComponent`、`EnemyUIComponent` 和 `IPawnUIInterface` 建立统一的数据入口。AttributeSet 在属性变化时广播生命值、怒气等百分比，Widget 基类在初始化时获取对应 UI Component，Blueprint Widget 只负责表现层绑定。
+UI 数据不直接散落在角色或 Widget 蓝图中，而是通过 `PawnUIComponent`、`HeroUIComponent`、`EnemyUIComponent` 和 `IPawnUIInterface` 建立统一的数据入口。AttributeSet 在属性变化时广播生命值、怒气等百分比，Widget 基类在初始化时获取对应 UI Component，Blueprint Widget 只负责表现层绑定。普通敌人使用头顶生命值条，Frost Giant 则可以通过共享 Ability 创建专用 Boss 血条并交由 `EnemyUIComponent` 管理生命周期。
 
 战斗反馈也沿用事件化思路。Gameplay Cue 负责命中和死亡音效，Hit Pause Ability 和 Camera Shake 负责近战打击感，敌人死亡通过 `Shared.Status.Dead` 标签触发后续死亡能力。这样可以把战斗结果、状态变化和表现反馈串联起来，同时减少系统之间的直接依赖。
 
 ### C++ 与 Blueprint 的职责拆分
 
-项目把稳定、可复用、需要强类型约束的逻辑放在 C++ 中，包括 ASC 扩展、AttributeSet、Ability 基类、CombatComponent、AIController、BTTask / BTService、输入组件、UI Component 和通用函数库。Blueprint 主要承担资产配置、Ability 具体表现、Behavior Tree 编排、Animation Blueprint、Widget 表现和 DataAsset 填表。
+项目把稳定、可复用、需要强类型约束的逻辑放在 C++ 中，包括 ASC 扩展、AttributeSet、Ability 与 AbilityTask 基类、CombatComponent、AIController、BTTask / BTService、异步资源加载、输入组件、UI Component 和通用函数库。Blueprint 主要承担资产配置、Ability 具体表现、Behavior Tree 编排、Animation Blueprint、Widget 表现和 DataAsset 填表。
 
 这种拆分使 Demo 既能体现 C++ 架构能力，也保留 UE 工作流中快速迭代内容的优势。
 
@@ -68,9 +78,13 @@ UI 数据不直接散落在角色或 Widget 蓝图中，而是通过 `PawnUIComp
 - Enemy 头顶生命值条
 - Guardian 敌人感知玩家、追击、转向、走位、近战攻击
 - Glacer 敌人感知玩家、选择射击位置、施法并发射投射物
-- Guardian 受击反应、死亡 Ability、死亡蒙太奇和死亡音效
+- Frost Giant Boss 感知玩家、三组近战 Ability、手部伤害碰撞和连击
+- Frost Giant 根据生命值阶段召唤 Gruntling 援军
+- 原生 AbilityTask 异步加载敌人类并在 NavMesh 可达区域生成
+- 普通敌人头顶血条与 Frost Giant 专用 Boss 血条
+- Guardian 与 Frost Giant 的受击反应、死亡 Ability、死亡蒙太奇和死亡音效
 - EQS Strafe 走位、敌人近战 Ability 随行为树激活
-- CombatTestMap 战斗测试地图，用于验证敌人组合、远程投射物和战斗行为
+- CombatTestMap 战斗测试地图，用于验证敌人组合、远程投射物、Boss 近战和召唤行为
 
 默认地图为 `/Game/Maps/CombatTestMap`，默认 GameMode 为 `/Game/GameModes/BP_BaseGameMode`。
 
@@ -117,20 +131,36 @@ AI Perception 感知目标
   -> HitReact / Gameplay Cue / 命中特效
 ```
 
+### Frost Giant 召唤流程
+
+```text
+Behavior Tree 检查当前生命值百分比
+  -> 按 Enemy.Ability.Summon 激活召唤 Ability
+  -> 召唤蒙太奇发送 Enemy.Event.Summon
+  -> UAbilityTask_WaitSpawnEnemies 接收 Gameplay Event
+  -> Asset Manager 异步加载 TSoftClassPtr 敌人类
+  -> Navigation System 查询 Boss 周围可达随机点
+  -> 生成指定数量的 Gruntling 并广播结果
+  -> 新敌人自动 Possess，并异步加载 StartUpData 初始化 GAS
+```
+
 ## 关键源码入口
 
 ```text
 Source/RPGDemo/Private/AbilitySystem/
   自定义 ASC、AttributeSet、GameplayAbility 基类、伤害 ExecutionCalculation
 
+Source/RPGDemo/Private/AbilitySystem/AbilityTasks/AbilityTask_WaitSpawnEnemies.cpp
+  等待召唤事件、异步加载敌人软类，并在 NavMesh 可达区域生成敌人
+
 Source/RPGDemo/Private/Components/Combat/
-  Pawn/Hero/Enemy CombatComponent，武器注册、碰撞窗口、命中事件派发
+  Pawn/Hero/Enemy CombatComponent，武器与手部碰撞窗口、命中事件派发
 
 Source/RPGDemo/Private/Components/Input/
   Enhanced Input 与 Gameplay Tag 绑定封装
 
 Source/RPGDemo/Private/Components/UI/
-  角色 UI 数据组件和属性变化委托
+  角色 UI 数据组件、属性变化委托和敌人动态 Widget 生命周期
 
 Source/RPGDemo/Private/AI/
   原生 Behavior Tree Task / Service
@@ -155,10 +185,10 @@ Content/PlayerCharacter/
   Hero 角色、输入、Ability、GameplayEffect、动画、武器和 UI 数据
 
 Content/EnemyCharacter/
-  Enemy 基类资产、Guardian 与 Glacer 敌人、行为树、EQS、受击、攻击、投射物和死亡资产
+  Enemy 基类资产、Guardian、Glacer 与 Frost Giant 的行为树、EQS、受击、攻击、召唤和死亡资产
 
 Content/Shared/
-  通用 GameplayAbility、GameplayEffect、投射物蓝图、AnimNotify 和 AnimNotifyState
+  通用 GameplayAbility、GameplayEffect、敌人生成 Ability、投射物蓝图、AnimNotify 和 AnimNotifyState
 
 Content/GameplayCues/
   命中、死亡和敌人攻击预警 Gameplay Cue
@@ -170,8 +200,12 @@ Content/Maps/FeatureDevMap.umap
   当前功能开发和演示地图
 
 Content/Maps/CombatTestMap.umap
-  战斗测试地图，用于集中验证敌人行为和投射物链路
+  默认战斗测试地图，用于集中验证敌人行为、投射物、Boss 近战与召唤链路
 ```
+
+## 下载可运行版本
+
+Windows Shipping 包可从 [GitHub Release v0.1.1](https://github.com/Linxuan-MY/UE5-RPGDemo/releases/tag/v0.1.1) 下载。该版本默认启动 `CombatTestMap`，已经过 Unreal AutomationTool 的 Win64 Shipping Build、Cook、Pak/IoStore 和归档流程。
 
 ## 运行项目
 
@@ -201,6 +235,6 @@ Windows 下当前配置以 Desktop / DX12 / SM6 为主。IDE 可使用 Visual St
 
 ## 当前状态
 
-项目处于功能 Demo 和架构验证阶段，已经完成 Hero 战斗、GAS 属性和伤害管线、武器生成与碰撞命中、UI 状态同步、Guardian 近战敌人 AI、Glacer 远程敌人 AI、EQS 走位、敌人近战与远程 Ability、投射物命中过滤、受击与死亡反馈等核心链路。
+项目处于功能 Demo 和架构验证阶段，已经完成 Hero 战斗、GAS 属性和伤害管线、武器与手部碰撞命中、UI 状态同步、Guardian 近战敌人 AI、Glacer 远程敌人 AI、Frost Giant Boss 多段近战与召唤、EQS 走位、按血量选择行为、软类异步加载、NavMesh 范围生成、敌人近战与远程 Ability、投射物命中过滤、受击与死亡反馈等核心链路。
 
-后续可继续扩展的方向包括：更多武器类型、格挡和破防、敌人技能组合、更多敌人 Archetype、Boss 行为、数值表完善、UI 菜单流程、存档和关卡目标系统。
+后续可继续扩展的方向包括：更多武器类型、格挡和破防、敌人技能组合、更多敌人 Archetype、Boss 多阶段机制与场景交互、数值表完善、UI 菜单流程、存档和关卡目标系统。
