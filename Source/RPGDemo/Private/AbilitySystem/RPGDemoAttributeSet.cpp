@@ -50,6 +50,20 @@ void URPGDemoAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCal
 
 		SetCurrentRage(NewCurrentRage);
 
+		if (GetCurrentRage() == GetMaxRage())
+		{
+			URPGDemoFunctionLibrary::AddGameplayTagToActorIfNone(Data.Target.GetAvatarActor(), RPGDemoGameplayTags::Player_Status_Rage_Full);
+		}
+		else if (GetCurrentRage() == 0.f)
+		{
+			URPGDemoFunctionLibrary::AddGameplayTagToActorIfNone(Data.Target.GetAvatarActor(), RPGDemoGameplayTags::Player_Status_Rage_None);
+		}
+		else
+		{
+			URPGDemoFunctionLibrary::RemoveGameplayTagFromActorIfFound(Data.Target.GetAvatarActor(), RPGDemoGameplayTags::Player_Status_Rage_Full);
+			URPGDemoFunctionLibrary::RemoveGameplayTagFromActorIfFound(Data.Target.GetAvatarActor(), RPGDemoGameplayTags::Player_Status_Rage_None);
+		}
+
 		if (UHeroUIComponent* HeroUIComponent = CachedPawnUIInterface->GetHeroUIComponent())
 		{
 			HeroUIComponent->OnCurrentRageChanged.Broadcast(NewCurrentRage / GetMaxRage());

@@ -63,20 +63,24 @@ void ARPGDemoProjectileBase::OnProjectileHit(UPrimitiveComponent* HitComponent, 
 void ARPGDemoProjectileBase::OnProjectileBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
-	APawn* HitPawn = Cast<APawn>(OtherActor);
-
-	if (!HitPawn || !CanDamageHitPawn(HitPawn))
+	if (OverlappedActors.Contains(OtherActor))
 	{
 		return;
 	}
 
-	FVector ImpactPoint = HitPawn->GetActorLocation();
-	if (bFromSweep)
-	{
-		ImpactPoint = SweepResult.ImpactPoint;
-	}
+	OverlappedActors.AddUnique(OtherActor);
 
-	HandleProjectileImpact(HitPawn, ImpactPoint);
+	if (APawn* HitPawn = Cast<APawn>(OtherActor))
+	{
+		FGameplayEventData Data;
+		Data.Instigator = GetInstigator();
+		Data.Target = HitPawn;
+
+		if (URPGDemoFunctionLibrary::TargetPawnHostile(GetInstigator(), HitPawn))
+		{
+			HandleApplyProjectileDamage(HitPawn, Data);
+		}
+	}
 }
 
 bool ARPGDemoProjectileBase::CanDamageHitPawn(APawn* InHitPawn) const

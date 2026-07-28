@@ -58,4 +58,6 @@ private:
 	bool CanDamageHitPawn(APawn* InHitPawn) const;
 	void HandleProjectileImpact(APawn* InHitPawn, const FVector& InImpactPoint);
 	void HandleApplyProjectileDamage(APawn* InHitPawn, const FGameplayEventData& InPayload);
+
+	TArray<AActor*> OverlappedActors;
 };
