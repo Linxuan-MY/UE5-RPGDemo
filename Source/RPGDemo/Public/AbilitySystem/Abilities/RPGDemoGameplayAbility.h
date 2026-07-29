@@ -18,7 +18,7 @@ enum class ERPGDemoAbilityActivationPolicy : uint8
 };
 
 /**
- * 
+ *
  */
 UCLASS()
 class RPGDEMO_API URPGDemoGameplayAbility : public UGameplayAbility
@@ -45,4 +45,6 @@ protected:
 	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Ability", meta = (DisplayName = "Apply Gameplay Effect Spec Handle To Target Actor", ExpandEnumAsExecs = "OutSuccessType"))
 	FActiveGameplayEffectHandle BP_ApplyEffectSpecHandleToTarget(AActor* TargetActor, const FGameplayEffectSpecHandle& InSpecHandle, ERPGDemoSuccessType& OutSuccessType);
 
+	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Ability")
+	void ApplyGameplayEffectSpecHandleToHitResaults(const FGameplayEffectSpecHandle& InSpecHandle, const TArray<FHitResult>& InHitResults);
 };

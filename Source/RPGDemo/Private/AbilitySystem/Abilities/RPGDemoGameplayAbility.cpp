@@ -5,6 +5,8 @@
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 #include "Components/Combat/PawnCombatComponent.h"
 #include "AbilitySystemBlueprintLibrary.h"
+#include "RPGDemoFunctionLibrary.h"
+#include "RPGDemoGameplayTags.h"
 
 void URPGDemoGameplayAbility::OnGiveAbility(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec)
 {
@@ -17,7 +19,7 @@ void URPGDemoGameplayAbility::OnGiveAbility(const FGameplayAbilityActorInfo* Act
 			ActorInfo->AbilitySystemComponent->TryActivateAbility(Spec.Handle);
 		}
 	}
-	
+
 }
 
 void URPGDemoGameplayAbility::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
@@ -64,4 +66,39 @@ FActiveGameplayEffectHandle URPGDemoGameplayAbility::BP_ApplyEffectSpecHandleToT
 
 	return ActiveGameplayEffectHandle;
 
+}
+
+void URPGDemoGameplayAbility::ApplyGameplayEffectSpecHandleToHitResaults(const FGameplayEffectSpecHandle& InSpecHandle,
+	const TArray<FHitResult>& InHitResults)
+{
+	if (InHitResults.IsEmpty())
+	{
+		return;
+	}
+
+	APawn* OwningPawn = Cast<APawn>(GetAvatarActorFromActorInfo());
+
+	for (const FHitResult& HitResult : InHitResults)
+	{
+		if (APawn* HitPawn = Cast<APawn>(HitResult.GetActor()))
+		{
+			if (URPGDemoFunctionLibrary::TargetPawnHostile(OwningPawn, HitPawn))
+			{
+				FActiveGameplayEffectHandle ActiveGameplayEffectHandle = NativeApplyEffectSpecToTarget(HitPawn, InSpecHandle);
+
+				if (ActiveGameplayEffectHandle.WasSuccessfullyApplied())
+				{
+					FGameplayEventData Data;
+					Data.Instigator = OwningPawn;
+					Data.Target = HitPawn;
+
+					UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
+						HitPawn,
+						RPGDemoGameplayTags::Shared_Event_HitReact,
+						Data
+					);
+				}
+			}
+		}
+	}
 }
