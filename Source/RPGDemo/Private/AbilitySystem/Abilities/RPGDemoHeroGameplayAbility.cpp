@@ -81,6 +81,11 @@ bool URPGDemoHeroGameplayAbility::GetAbilityRemainingCooldownByTag(FGameplayTag 
 		RemainingCooldownTime = TimeRemainingAndDuration[0].Key;
 		TotalCooldownTime = TimeRemainingAndDuration[0].Value;
 	}
+	else
+	{
+		RemainingCooldownTime = 0;
+		TotalCooldownTime = 0;
+	}
 
 	return RemainingCooldownTime > 0.f;
 }
