@@ -8,7 +8,7 @@
 #include "RPGDemoAbilitySystemComponent.generated.h"
 
 /**
- * 
+ *
  */
 UCLASS()
 class RPGDEMO_API URPGDemoAbilitySystemComponent : public UAbilitySystemComponent
@@ -20,7 +20,7 @@ public:
 	void OnAbilityInputReleased(const FGameplayTag InInputTag);
 
 	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Ability", meta = (ApplyLevel = "1"))
-	void GrantHeroWeaponAbilities(const TArray<FRPGDemoHeroAbilitySet>& InDefaultWeaponAbilities, int32 ApplyLevel, TArray<FGameplayAbilitySpecHandle>& OutGrantedAbilitySpecHandles);
+	void GrantHeroWeaponAbilities(const TArray<FRPGDemoHeroAbilitySet>& InDefaultWeaponAbilities, const TArray<FRPGDemoHeroSpecialAbilitySet>& InSpecialWeaponAbilities, int32 ApplyLevel, TArray<FGameplayAbilitySpecHandle>& OutGrantedAbilitySpecHandles);
 
 	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Ability")
 	void RemoveGrantedHeroWeaponAbilities(UPARAM(ref) TArray<FGameplayAbilitySpecHandle>& InSpecHandlesToRemove);

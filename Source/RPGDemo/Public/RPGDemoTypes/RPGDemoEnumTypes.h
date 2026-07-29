@@ -20,3 +20,18 @@ enum class ERPGDemoSuccessType : uint8
 	Successful,
 	Failed
 };
+
+UENUM()
+enum class ERPGDemoCountDownActionInput : uint8
+{
+	Start,
+	Cancel
+};
+
+UENUM()
+enum class ERPGDemoCountDownActionOutput : uint8
+{
+	Updated,
+	Completed,
+	Cancelled
+};

@@ -6,11 +6,12 @@
 #include "AbilitySystem/Abilities/RPGDemoGameplayAbility.h"
 #include "RPGDemoHeroGameplayAbility.generated.h"
 
+class UHeroCombatComponent;
 class ARPGDemoHeroCharacter;
 class ARPGDemoHeroController;
 
 /**
- * 
+ *
  */
 UCLASS()
 class RPGDEMO_API URPGDemoHeroGameplayAbility : public URPGDemoGameplayAbility
@@ -30,6 +31,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "RPGDemo|Ability")
 	FGameplayEffectSpecHandle MakeHeroDamageEffectSpecHandle(TSubclassOf<UGameplayEffect> EffectClass, float InWeaponBaseDamage, FGameplayTag InCurrentAttackTypeTag, int32 InUsedComboCount);
 
+	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Ability")
+	bool GetAbilityRemainingCooldownByTag(FGameplayTag InCooldownTag, float& TotalCooldownTime, float& RemainingCooldownTime);
 
 private:
 	TWeakObjectPtr<ARPGDemoHeroCharacter> CachedRPGDemoHeroCharacter;

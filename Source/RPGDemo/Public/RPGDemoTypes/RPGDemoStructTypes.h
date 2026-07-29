@@ -27,6 +27,18 @@ struct FRPGDemoHeroAbilitySet
 };
 
 USTRUCT(BlueprintType)
+struct FRPGDemoHeroSpecialAbilitySet : public FRPGDemoHeroAbilitySet
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	TSoftObjectPtr<UMaterialInstance> SoftAbilityIconMaterial;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (Categories = "Player.Cooldown"))
+	FGameplayTag AbilityCooldownTag;
+};
+
+USTRUCT(BlueprintType)
 struct FRPGDemoHeroWeaponData
 {
 	GENERATED_BODY()
@@ -40,10 +52,13 @@ struct FRPGDemoHeroWeaponData
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (TitleProperty = "InputTag"))
 	TArray<FRPGDemoHeroAbilitySet> DefaultWeaponAbilities;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (TitleProperty = "InputTag"))
+	TArray<FRPGDemoHeroSpecialAbilitySet> SpecialWeaponAbilities;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	FScalableFloat WeaponBaseDamage;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	TSoftObjectPtr<UTexture2D> SoftWeaponIconTexture;
-	
+
 };
