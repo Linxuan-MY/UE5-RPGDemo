@@ -6,6 +6,7 @@
 #include "AbilitySystem/Abilities/RPGDemoGameplayAbility.h"
 #include "RPGDemoHeroGameplayAbility.generated.h"
 
+class UHeroUIComponent;
 class UHeroCombatComponent;
 class ARPGDemoHeroCharacter;
 class ARPGDemoHeroController;
@@ -28,6 +29,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "RPGDemo|Ability")
 	UHeroCombatComponent* GetHeroCombatComponentFromActorInfo();
 
+	UFUNCTION(BlueprintPure, Category = "RPGDemo|Ability")
+	UHeroUIComponent* GetHeroUIComponentFromActorInfo();
 	UFUNCTION(BlueprintPure, Category = "RPGDemo|Ability")
 	FGameplayEffectSpecHandle MakeHeroDamageEffectSpecHandle(TSubclassOf<UGameplayEffect> EffectClass, float InWeaponBaseDamage, FGameplayTag InCurrentAttackTypeTag, int32 InUsedComboCount);
 

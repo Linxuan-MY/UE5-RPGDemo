@@ -98,6 +98,7 @@ void ARPGDemoHeroCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 	RPGDemoInputComponent->BindNativeInputAction(InputConfigDataAsset, RPGDemoGameplayTags::InputTag_SwitchTarget, ETriggerEvent::Triggered, this, &ThisClass::Input_SwitchTargetTriggered);
 	RPGDemoInputComponent->BindNativeInputAction(InputConfigDataAsset, RPGDemoGameplayTags::InputTag_SwitchTarget, ETriggerEvent::Completed, this, &ThisClass::Input_SwitchTargetCompleted);
 
+	RPGDemoInputComponent->BindNativeInputAction(InputConfigDataAsset, RPGDemoGameplayTags::InputTag_PickUp_Stones, ETriggerEvent::Started, this, &ThisClass::Input_PickUpStoneStarted);
 	RPGDemoInputComponent->BindAbilityInputAction(InputConfigDataAsset, this, &ThisClass::Input_AbilityInputPressed, &ThisClass::Input_AbilityInputReleased);
 }
 
@@ -158,6 +159,17 @@ void ARPGDemoHeroCharacter::Input_SwitchTargetCompleted(const FInputActionValue&
 	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
 		this,
 		SwitchDirection.X > 0.f ? RPGDemoGameplayTags::Player_Event_SwitchTarget_Right : RPGDemoGameplayTags::Player_Event_SwitchTarget_Left,
+		Data
+		);
+}
+
+void ARPGDemoHeroCharacter::Input_PickUpStoneStarted(const FInputActionValue& InputActionValue)
+{
+	FGameplayEventData Data;
+
+	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
+		this,
+		RPGDemoGameplayTags::Player_Event_ConsumeStones,
 		Data
 		);
 }
