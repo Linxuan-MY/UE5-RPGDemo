@@ -2,7 +2,7 @@
 
 RPGDemo 是一个基于 Unreal Engine 5.4 的第三人称动作 RPG 技术 Demo。项目重点不是堆叠完整游戏内容，而是验证一套可以扩展的动作 RPG Gameplay 架构：用 C++ 承担核心运行时框架，用 Blueprint 和数据资产承载角色、能力、动画、AI 行为和反馈表现。
 
-当前 Demo 已形成一条可体验的玩法闭环：玩家角色使用斧类武器进行轻攻击和重攻击，Guardian 与 Glacer 分别验证近战和远程敌人行为，Frost Giant Boss 进一步加入多段近战、血量阶段判断、召唤援军和 Boss UI。战斗结果会同步驱动动画、UI、Hit Pause、Camera Shake 和 Gameplay Cue。
+当前 Demo 已形成一条可体验的玩法闭环：玩家角色使用斧类武器进行轻重连击、积累并激活怒气、释放轻/重特殊武器技能，以及拾取治疗石和怒气石；Guardian 与 Glacer 分别验证近战和远程敌人行为，Frost Giant Boss 进一步加入多段近战、血量阶段判断、召唤援军和 Boss UI。战斗结果会同步驱动动画、UI、Hit Pause、Camera Shake 和 Gameplay Cue。
 
 ## 技术栈
 
@@ -29,6 +29,14 @@ RPGDemo 是一个基于 Unreal Engine 5.4 的第三人称动作 RPG 技术 Demo�
 能力授予和激活并不直接绑定具体按键或蓝图节点，而是通过 Gameplay Tag 建立连接。Hero 的输入配置把 Enhanced Input Action 映射到 `Input.*` 标签，ASC 再根据 AbilitySpec 的 Dynamic Ability Tags 激活对应能力。武器装备后也可以动态授予和移除武器能力，使角色基础能力与武器能力保持解耦。
 
 伤害结算使用自定义 ExecutionCalculation。攻击 Ability 构建 GameplayEffect Spec，通过 SetByCaller 写入基础伤害、攻击类型和连击段数；执行计算再读取 Source `AttackPower`、Target `DefensePower`，计算最终伤害并写回 `DamageTaken`。AttributeSet 在 `PostGameplayEffectExecute` 中完成生命值扣减、属性夹紧、UI 广播和死亡状态标签写入。
+
+### 怒气、特殊武器能力与战利品
+
+Hero 的 AttributeSet 已接入 `CurrentRage` 和 `MaxRage`，怒气变化会同步更新状态标签与 UI。普通战斗可以积累怒气，满值后通过独立的 Rage Ability 激活怒气状态，并由 Gameplay Cue 和动画表现反馈激活过程。
+
+斧类武器除普通轻重攻击外，还提供轻、重两种特殊武器 Ability。它们分别使用独立的输入标签、冷却标签和 GameplayEffect，并通过 `HeroUIComponent` 向技能槽广播冷却总时长与剩余时间。每个技能槽保存自己的冷却快照，避免另一技能的冷却事件干扰正在播放的遮罩进度。
+
+敌人侧可以通过 SpawnStone Ability 生成治疗石或怒气石；Hero 的拾取 Ability 会检测附近石头、提示交互并统一消费对应 GameplayEffect，用于恢复生命值或补充怒气。
 
 ### 数据驱动的近战战斗链路
 
@@ -72,6 +80,9 @@ UI 数据不直接散落在角色或 Widget 蓝图中，而是通过 `PawnUIComp
 
 - 第三人称 Hero 角色移动、镜头控制、斧类武器装备和卸下
 - 轻攻击、重攻击和连击段数参与伤害倍率
+- 怒气积累、满怒气状态与 Rage Ability 激活反馈
+- 斧类武器轻/重特殊 Ability、独立冷却与技能槽遮罩
+- Guardian、Glacer 生成治疗石或怒气石，Hero 检测、拾取并消费
 - 基于武器碰撞窗口的近战命中检测
 - 命中停顿、近战 Camera Shake、命中音效 Gameplay Cue
 - Hero 生命值、怒气和装备武器图标 UI
@@ -205,7 +216,7 @@ Content/Maps/CombatTestMap.umap
 
 ## 下载可运行版本
 
-Windows Shipping 包可从 [GitHub Release v0.1.1](https://github.com/Linxuan-MY/UE5-RPGDemo/releases/tag/v0.1.1) 下载。该版本默认启动 `CombatTestMap`，已经过 Unreal AutomationTool 的 Win64 Shipping Build、Cook、Pak/IoStore 和归档流程。
+Windows Shipping 包可从 [GitHub Release v0.1.2](https://github.com/Linxuan-MY/UE5-RPGDemo/releases/tag/v0.1.2) 下载。该版本加入怒气能力、轻/重特殊武器技能、治疗石与怒气石，并修复多个特殊技能槽之间的冷却遮罩干扰。版本默认启动 `CombatTestMap`，已经过 Unreal AutomationTool 的 Win64 Shipping Build、Cook、Pak/IoStore、归档和启动烟测。
 
 ## 运行项目
 
@@ -235,6 +246,6 @@ Windows 下当前配置以 Desktop / DX12 / SM6 为主。IDE 可使用 Visual St
 
 ## 当前状态
 
-项目处于功能 Demo 和架构验证阶段，已经完成 Hero 战斗、GAS 属性和伤害管线、武器与手部碰撞命中、UI 状态同步、Guardian 近战敌人 AI、Glacer 远程敌人 AI、Frost Giant Boss 多段近战与召唤、EQS 走位、按血量选择行为、软类异步加载、NavMesh 范围生成、敌人近战与远程 Ability、投射物命中过滤、受击与死亡反馈等核心链路。
+项目处于功能 Demo 和架构验证阶段，已经完成 Hero 战斗、GAS 属性和伤害管线、怒气能力、轻/重特殊武器技能及独立冷却 UI、治疗石与怒气石的生成和拾取、武器与手部碰撞命中、UI 状态同步、Guardian 近战敌人 AI、Glacer 远程敌人 AI、Frost Giant Boss 多段近战与召唤、EQS 走位、按血量选择行为、软类异步加载、NavMesh 范围生成、敌人近战与远程 Ability、投射物命中过滤、受击与死亡反馈等核心链路。
 
 后续可继续扩展的方向包括：更多武器类型、格挡和破防、敌人技能组合、更多敌人 Archetype、Boss 多阶段机制与场景交互、数值表完善、UI 菜单流程、存档和关卡目标系统。
