@@ -15,10 +15,9 @@
 #include "Components/Combat/HeroCombatComponent.h"
 #include "Components/UI/HeroUIComponent.h"
 #include "AbilitySystemBlueprintLibrary.h"
+#include "GameModes/RPGDemoBaseGameMode.h"
 
 #include "RPGDemoDebugHelper.h"
-
-
 
 
 ARPGDemoHeroCharacter::ARPGDemoHeroCharacter()
@@ -73,7 +72,34 @@ void ARPGDemoHeroCharacter::PossessedBy(AController* NewController)
 	{
 		if (UDataAsset_StartUpDataBase* LoadedData = CharacterStartUpData.LoadSynchronous())
 		{
-			LoadedData->GiveToAbilitySystemComponent(RPGDemoAbilitySystemComponent);
+			int32 AbilityApplyLevel = 1;
+
+			if (ARPGDemoBaseGameMode* BaseGameMode = GetWorld()->GetAuthGameMode<ARPGDemoBaseGameMode>())
+			{
+				switch (BaseGameMode->GetCurrentGameDifficulty())
+				{
+				case ERPGDemoGameDifficulty::Easy:
+					AbilityApplyLevel = 4;
+					break;
+
+					case ERPGDemoGameDifficulty::Normal:
+					AbilityApplyLevel = 3;
+					break;
+
+					case ERPGDemoGameDifficulty::Hard:
+					AbilityApplyLevel = 2;
+					break;
+
+					case ERPGDemoGameDifficulty::ExtremelyHard:
+					AbilityApplyLevel = 1;
+					break;
+
+					default:
+					break;
+				}
+			}
+
+			LoadedData->GiveToAbilitySystemComponent(RPGDemoAbilitySystemComponent, AbilityApplyLevel);
 		}
 	}
 }

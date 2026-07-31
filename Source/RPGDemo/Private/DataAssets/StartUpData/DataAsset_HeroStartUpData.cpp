@@ -2,7 +2,7 @@
 
 
 #include "DataAssets/StartUpData/DataAsset_HeroStartUpData.h"
-#include "AbilitySystem/Abilities/RPGDemoGameplayAbility.h"
+#include "AbilitySystem/Abilities/RPGDemoHeroGameplayAbility.h"
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 
 

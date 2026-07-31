@@ -11,6 +11,7 @@
 #include "Widgets/RPGDemoWidgetBase.h"
 #include "Components/BoxComponent.h"
 #include "RPGDemoFunctionLibrary.h"
+#include "GameModes/RPGDemoBaseGameMode.h"
 
 #include "RPGDemoDebugHelper.h"
 
@@ -114,14 +115,41 @@ void ARPGDemoEnemyCharacter::InitEnemyStartUpData()
 		return;
 	}
 
+	int32 AbilityApplyLevel = 1;
+
+	if (ARPGDemoBaseGameMode* BaseGameMode = GetWorld()->GetAuthGameMode<ARPGDemoBaseGameMode>())
+	{
+		switch (BaseGameMode->GetCurrentGameDifficulty())
+		{
+		case ERPGDemoGameDifficulty::Easy:
+			AbilityApplyLevel = 1;
+			break;
+
+		case ERPGDemoGameDifficulty::Normal:
+			AbilityApplyLevel = 2;
+			break;
+
+		case ERPGDemoGameDifficulty::Hard:
+			AbilityApplyLevel = 3;
+			break;
+
+		case ERPGDemoGameDifficulty::ExtremelyHard:
+			AbilityApplyLevel = 4;
+			break;
+
+		default:
+			break;
+		}
+	}
+
 	UAssetManager::GetStreamableManager().RequestAsyncLoad(
 		CharacterStartUpData.ToSoftObjectPath(),
 		FStreamableDelegate::CreateLambda(
-			[this]()
+			[this, AbilityApplyLevel]()
 			{
 				if(UDataAsset_StartUpDataBase* LoadedData = CharacterStartUpData.Get())
 				{
-					LoadedData->GiveToAbilitySystemComponent(RPGDemoAbilitySystemComponent);
+					LoadedData->GiveToAbilitySystemComponent(RPGDemoAbilitySystemComponent, AbilityApplyLevel);
 				}
 			}
 		)

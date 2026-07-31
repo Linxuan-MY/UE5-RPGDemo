@@ -35,3 +35,13 @@ enum class ERPGDemoCountDownActionOutput : uint8
 	Completed,
 	Cancelled
 };
+
+UENUM(BlueprintType)
+enum class ERPGDemoGameDifficulty : uint8
+{
+	Easy,
+	Normal,
+	Hard,
+	ExtremelyHard
+};
+

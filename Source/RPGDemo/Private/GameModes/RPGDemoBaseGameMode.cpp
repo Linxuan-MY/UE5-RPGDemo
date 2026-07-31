@@ -3,3 +3,8 @@
 
 #include "GameModes/RPGDemoBaseGameMode.h"
 
+ARPGDemoBaseGameMode::ARPGDemoBaseGameMode()
+{
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = true;
+}
