@@ -10,6 +10,9 @@
 #include "RPGDemoGameplayTags.h"
 #include "Kismet/GameplayStatics.h"
 #include "RPGDemoTypes/RPGDemoCountDownAction.h"
+#include "RPGDemoGameInstance.h"
+#include "Kismet/GameplayStatics.h"
+#include "SaveGame/RPGDemoSaveGame.h"
 
 URPGDemoAbilitySystemComponent* URPGDemoFunctionLibrary::NativeGetRPGDemoASCFromActor(AActor* InActor)
 {
@@ -194,4 +197,80 @@ void URPGDemoFunctionLibrary::CountDown(const UObject* WorldContextObject, float
 			FoundAction->CancelAction();
 		}
 	}
+}
+
+URPGDemoGameInstance* URPGDemoFunctionLibrary::GetRPGDemoGameInstance(const UObject* WorldContextObject)
+{
+	if (GEngine)
+	{
+		if (UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull))
+		{
+			return World->GetGameInstance<URPGDemoGameInstance>();
+		}
+	}
+
+	return nullptr;
+}
+
+void URPGDemoFunctionLibrary::ToggleInputMode(const UObject* WorldContextObject, ERPGDemoInputMode InInputMode)
+{
+	APlayerController* PlayerController = nullptr;
+
+	if (GEngine)
+	{
+		if (UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull))
+		{
+			PlayerController = World->GetFirstPlayerController();
+		}
+	}
+
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	FInputModeGameOnly GameOnlyMode;
+	FInputModeUIOnly UIOnlyMode;
+
+	switch (InInputMode)
+	{
+		case ERPGDemoInputMode::GameOnly:
+			PlayerController->SetInputMode(GameOnlyMode);
+			PlayerController->bShowMouseCursor = false;
+			break;
+
+		case ERPGDemoInputMode::UIOnly:
+			PlayerController->SetInputMode(UIOnlyMode);
+			PlayerController->bShowMouseCursor = true;
+			break;
+
+		default:
+			break;
+	}
+}
+
+void URPGDemoFunctionLibrary::SaveCurrentGameDifficulty(ERPGDemoGameDifficulty InGameDifficulty)
+{
+	USaveGame* SaveGameObject = UGameplayStatics::CreateSaveGameObject(URPGDemoSaveGame::StaticClass());
+
+	if (URPGDemoSaveGame* RPGDemoSaveGameObject = Cast<URPGDemoSaveGame>(SaveGameObject))
+	{
+		RPGDemoSaveGameObject->SavedGameDifficulty = InGameDifficulty;
+		const bool bWasSaved = UGameplayStatics::SaveGameToSlot(RPGDemoSaveGameObject, RPGDemoGameplayTags::GameData_SaveGame_Slot_1.GetTag().ToString(), 0);
+	}
+}
+
+bool URPGDemoFunctionLibrary::TryLoadSavedGameDifficulty(ERPGDemoGameDifficulty& OutGameDifficulty)
+{
+	if (UGameplayStatics::DoesSaveGameExist(RPGDemoGameplayTags::GameData_SaveGame_Slot_1.GetTag().ToString(), 0))
+	{
+		USaveGame* LoadedSaveGame = UGameplayStatics::LoadGameFromSlot(RPGDemoGameplayTags::GameData_SaveGame_Slot_1.GetTag().ToString(), 0);
+
+		if (URPGDemoSaveGame* RPGDemoSaveGame = Cast<URPGDemoSaveGame>(LoadedSaveGame))
+		{
+			OutGameDifficulty = RPGDemoSaveGame->SavedGameDifficulty;
+			return true;
+		}
+	}
+	return false;
 }

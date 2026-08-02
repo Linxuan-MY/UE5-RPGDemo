@@ -99,4 +99,10 @@ namespace RPGDemoGameplayTags
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Status_HitReact_Left);
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Status_HitReact_Right);
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Status_Invincible);
+
+	/** Game Data Tags **/
+	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameData_Level_SurvivalGameModeMap);
+	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameData_Level_MainMenuMap);
+
+	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameData_SaveGame_Slot_1);
 }

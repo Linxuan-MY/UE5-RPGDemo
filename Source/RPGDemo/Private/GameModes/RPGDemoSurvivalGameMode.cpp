@@ -8,6 +8,18 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/TargetPoint.h"
 #include "NavigationSystem.h"
+#include "RPGDemoFunctionLibrary.h"
+
+void ARPGDemoSurvivalGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
+{
+	Super::InitGame(MapName, Options, ErrorMessage);
+
+	ERPGDemoGameDifficulty SavedGameDifficulty;
+	if (URPGDemoFunctionLibrary::TryLoadSavedGameDifficulty(SavedGameDifficulty))
+	{
+		CurrentGameDifficulty = SavedGameDifficulty;
+	}
+}
 
 void ARPGDemoSurvivalGameMode::BeginPlay()
 {

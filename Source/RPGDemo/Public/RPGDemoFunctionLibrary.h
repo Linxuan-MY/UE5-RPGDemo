@@ -7,6 +7,7 @@
 #include "RPGDemoTypes/RPGDemoEnumTypes.h"
 #include "RPGDemoFunctionLibrary.generated.h"
 
+class URPGDemoGameInstance;
 struct FGameplayEffectSpecHandle;
 struct FGameplayTag;
 class URPGDemoAbilitySystemComponent;
@@ -68,4 +69,16 @@ public:
 		ERPGDemoCountDownActionOutput& CountDownOutput,
 		FLatentActionInfo LatentInfo
 		);
+
+	UFUNCTION(BlueprintPure, Category = "RPGDemo|FunctionLibrary", meta = (WorldContext = "WorldContextObject"))
+	static URPGDemoGameInstance* GetRPGDemoGameInstance(const UObject* WorldContextObject);
+
+	UFUNCTION(BlueprintCallable, Category = "RPGDemo|FunctionLibrary", meta = (WorldContext = "WorldContextObject"))
+	static void ToggleInputMode(const UObject* WorldContextObject, ERPGDemoInputMode InInputMode);
+
+	UFUNCTION(BlueprintCallable, Category = "RPGDemo|FunctionLibrary")
+	static void SaveCurrentGameDifficulty(ERPGDemoGameDifficulty InGameDifficulty);
+
+	UFUNCTION(BlueprintCallable, Category = "RPGDemo|FunctionLibrary")
+	static bool TryLoadSavedGameDifficulty(ERPGDemoGameDifficulty& OutGameDifficulty);
 };

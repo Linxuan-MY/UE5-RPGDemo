@@ -45,3 +45,9 @@ enum class ERPGDemoGameDifficulty : uint8
 	ExtremelyHard
 };
 
+UENUM(BlueprintType)
+enum class ERPGDemoInputMode : uint8
+{
+	GameOnly,
+	UIOnly
+};
