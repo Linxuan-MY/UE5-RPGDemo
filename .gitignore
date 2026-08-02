@@ -60,6 +60,9 @@ Desktop.ini
 # Isolated feature worktrees
 /.worktrees/
 
+# Local planning and design documents
+/docs/
+
 # Do not commit packaged builds unless intentionally versioning a release
 /Package/
 /Packages/
