@@ -47,7 +47,7 @@ struct FRPGDemoHeroWeaponData
 	TSubclassOf<URPGDemoHeroLinkedAnimLayer> WeaponAnimLayerToLink;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	UInputMappingContext* WeaponInputMappingContext;
+	UInputMappingContext* WeaponInputMappingContext = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (TitleProperty = "InputTag"))
 	TArray<FRPGDemoHeroAbilitySet> DefaultWeaponAbilities;

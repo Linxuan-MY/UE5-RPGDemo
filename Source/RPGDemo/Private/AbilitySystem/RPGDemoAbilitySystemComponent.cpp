@@ -11,7 +11,7 @@ void URPGDemoAbilitySystemComponent::OnAbilityInputPressed(const FGameplayTag In
 
 	for (const FGameplayAbilitySpec& AbilitySpec : GetActivatableAbilities())
 	{
-		if (!AbilitySpec.DynamicAbilityTags.HasTagExact(InInputTag)) continue;
+		if (!AbilitySpec.GetDynamicSpecSourceTags().HasTagExact(InInputTag)) continue;
 
 		if (InInputTag.MatchesTag(RPGDemoGameplayTags::InputTag_Toggleable) && AbilitySpec.IsActive())
 		{
@@ -30,7 +30,7 @@ void URPGDemoAbilitySystemComponent::OnAbilityInputReleased(const FGameplayTag I
 
 	for (const FGameplayAbilitySpec& Spec : GetActivatableAbilities())
 	{
-		if (Spec.DynamicAbilityTags.HasTagExact(InInputTag) && Spec.IsActive())
+		if (Spec.GetDynamicSpecSourceTags().HasTagExact(InInputTag) && Spec.IsActive())
 		{
 			CancelAbilityHandle(Spec.Handle);
 		}
@@ -47,7 +47,7 @@ void URPGDemoAbilitySystemComponent::GrantHeroWeaponAbilities(const TArray<FRPGD
 		FGameplayAbilitySpec AbilitySpec(AbilitySet.AbilityToGrant);
 		AbilitySpec.SourceObject = GetAvatarActor();
 		AbilitySpec.Level = ApplyLevel;
-		AbilitySpec.DynamicAbilityTags.AddTag(AbilitySet.InputTag);
+		AbilitySpec.GetDynamicSpecSourceTags().AddTag(AbilitySet.InputTag);
 
 		OutGrantedAbilitySpecHandles.AddUnique(GiveAbility(AbilitySpec));
 	}
@@ -58,7 +58,7 @@ void URPGDemoAbilitySystemComponent::GrantHeroWeaponAbilities(const TArray<FRPGD
 		FGameplayAbilitySpec AbilitySpec(AbilitySet.AbilityToGrant);
 		AbilitySpec.SourceObject = GetAvatarActor();
 		AbilitySpec.Level = ApplyLevel;
-		AbilitySpec.DynamicAbilityTags.AddTag(AbilitySet.InputTag);
+		AbilitySpec.GetDynamicSpecSourceTags().AddTag(AbilitySet.InputTag);
 
 		OutGrantedAbilitySpecHandles.AddUnique(GiveAbility(AbilitySpec));
 	}
