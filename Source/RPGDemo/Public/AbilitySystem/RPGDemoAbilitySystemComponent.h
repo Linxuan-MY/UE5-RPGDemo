@@ -19,6 +19,9 @@ public:
 	void OnAbilityInputPressed(const FGameplayTag InInputTag);
 	void OnAbilityInputReleased(const FGameplayTag InInputTag);
 
+	/** Cancels abilities driven by hold-style input before a menu consumes release events. */
+	void CancelInputHeldAbilities();
+
 	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Ability", meta = (ApplyLevel = "1"))
 	void GrantHeroWeaponAbilities(const TArray<FRPGDemoHeroAbilitySet>& InDefaultWeaponAbilities, const TArray<FRPGDemoHeroSpecialAbilitySet>& InSpecialWeaponAbilities, int32 ApplyLevel, TArray<FGameplayAbilitySpecHandle>& OutGrantedAbilitySpecHandles);
 

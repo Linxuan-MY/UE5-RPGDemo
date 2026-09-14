@@ -4,6 +4,7 @@
 #include "AbilitySystem/AbilityTasks/AbilityTask_WaitSpawnEnemies.h"
 #include "AbilitySystemComponent.h"
 #include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
 #include "NavigationSystem.h"
 #include "Characters/RPGDemoEnemyCharacter.h"
 
@@ -24,8 +25,29 @@ UAbilityTask_WaitSpawnEnemies* UAbilityTask_WaitSpawnEnemies::WaitSpawnEnemies(U
 	return Node;
 }
 
+bool UAbilityTask_WaitSpawnEnemies::HasSpawnAuthority() const
+{
+	const AActor* Avatar = AbilitySystemComponent.IsValid() ? AbilitySystemComponent->GetAvatarActor() : nullptr;
+	return IsValid(Avatar) && Avatar->HasAuthority() && !Avatar->IsActorBeingDestroyed() &&
+		Avatar->GetWorld() && !Avatar->GetWorld()->bIsTearingDown;
+}
+
+void UAbilityTask_WaitSpawnEnemies::FailAndEndTask()
+{
+	if (ShouldBroadcastAbilityTaskDelegates())
+	{
+		DidNotSpawn.Broadcast(TArray<ARPGDemoEnemyCharacter*>());
+	}
+	EndTask();
+}
+
 void UAbilityTask_WaitSpawnEnemies::Activate()
 {
+	if (!HasSpawnAuthority())
+	{
+		FailAndEndTask();
+		return;
+	}
 	FGameplayEventMulticastDelegate& Delegate = AbilitySystemComponent->GenericGameplayEventCallbacks.FindOrAdd(CachedEventTag);
 
 	DelegateHandle = Delegate.AddUObject(this, &ThisClass::OnGameplayEventRecieved);
@@ -33,17 +55,38 @@ void UAbilityTask_WaitSpawnEnemies::Activate()
 
 void UAbilityTask_WaitSpawnEnemies::OnDestroy(bool bInOwnerFinished)
 {
-	FGameplayEventMulticastDelegate& Delegate = AbilitySystemComponent->GenericGameplayEventCallbacks.FindOrAdd(CachedEventTag);
-	Delegate.Remove(DelegateHandle);
+	bTaskEnded = true;
+	if (AbilitySystemComponent.IsValid())
+	{
+		if (FGameplayEventMulticastDelegate* Delegate = AbilitySystemComponent->GenericGameplayEventCallbacks.Find(CachedEventTag))
+		{
+			Delegate->Remove(DelegateHandle);
+		}
+	}
+	if (SpawnClassHandle.IsValid())
+	{
+		SpawnClassHandle->CancelHandle();
+		SpawnClassHandle.Reset();
+	}
 
 	Super::OnDestroy(bInOwnerFinished);
 }
 
 void UAbilityTask_WaitSpawnEnemies::OnGameplayEventRecieved(const FGameplayEventData* InPayload)
 {
+	if (bTaskEnded || bSpawnRequested)
+	{
+		return;
+	}
+	if (!HasSpawnAuthority())
+	{
+		FailAndEndTask();
+		return;
+	}
+	bSpawnRequested = true;
 	if (ensure(!CachedSoftEnemyClassToSpawn.IsNull()))
 	{
-		UAssetManager::Get().GetStreamableManager().RequestAsyncLoad(
+		SpawnClassHandle = UAssetManager::Get().GetStreamableManager().RequestAsyncLoad(
 			CachedSoftEnemyClassToSpawn.ToSoftObjectPath(),
 			FStreamableDelegate::CreateUObject(this, &ThisClass::OnEnemyClassLoaded)
 		);
@@ -61,6 +104,15 @@ void UAbilityTask_WaitSpawnEnemies::OnGameplayEventRecieved(const FGameplayEvent
 
 void UAbilityTask_WaitSpawnEnemies::OnEnemyClassLoaded()
 {
+	if (bTaskEnded)
+	{
+		return;
+	}
+	if (!HasSpawnAuthority())
+	{
+		FailAndEndTask();
+		return;
+	}
 	UClass* LoadedClass = CachedSoftEnemyClassToSpawn.Get();
 	UWorld* World = GetWorld();
 
@@ -82,8 +134,15 @@ void UAbilityTask_WaitSpawnEnemies::OnEnemyClassLoaded()
 
 	for (int32 i=0; i<CachedNumToSpawn; i++)
 	{
-		FVector RandomLocation;
-		UNavigationSystemV1::K2_GetRandomReachablePointInRadius(this, CachedSpawnOrigin, RandomLocation, CachedRandomSpawnRadius);
+		if (bTaskEnded || !HasSpawnAuthority())
+		{
+			break;
+		}
+		FVector RandomLocation = CachedSpawnOrigin;
+		if (!UNavigationSystemV1::K2_GetRandomReachablePointInRadius(this, CachedSpawnOrigin, RandomLocation, CachedRandomSpawnRadius))
+		{
+			continue;
+		}
 
 		RandomLocation += FVector(0.f, 0.f, 150.f);
 

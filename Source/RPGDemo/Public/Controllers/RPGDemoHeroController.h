@@ -17,12 +17,16 @@ class RPGDEMO_API ARPGDemoHeroController : public APlayerController, public IGen
 
 public:
 	ARPGDemoHeroController();
+	virtual void AcknowledgePossession(APawn* PossessedPawn) override;
 
 	//~Begin IGenericTeamAgentInterface Interface
 	virtual FGenericTeamId GetGenericTeamId() const override;
 	//~End IGenericTeamAgentInterface Interface
 
 private:
+	virtual void BeginPlay() override;
+	void RestoreGameplayInput();
+
 	FGenericTeamId HeroTeamId;
 	
 };

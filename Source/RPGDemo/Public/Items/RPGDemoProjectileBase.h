@@ -23,6 +23,7 @@ UCLASS()
 class RPGDEMO_API ARPGDemoProjectileBase : public AActor
 {
 	GENERATED_BODY()
+	friend class FRPGDemoNetworkRegressionCommand;
 
 public:
 	ARPGDemoProjectileBase();
@@ -58,6 +59,14 @@ private:
 	bool CanDamageHitPawn(APawn* InHitPawn) const;
 	void HandleProjectileImpact(APawn* InHitPawn, const FVector& InImpactPoint);
 	void HandleApplyProjectileDamage(APawn* InHitPawn, const FGameplayEventData& InPayload);
+
+	// Terminal hits are consumed before damage events can re-enter collision callbacks.
+	bool bImpactProcessed = false;
+	uint32 ImpactSequence = 0;
+	uint32 LastImpactSequence = 0;
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastProjectileImpact(const FVector_NetQuantize& ImpactPoint, uint32 Sequence);
 
 	TArray<AActor*> OverlappedActors;
 };

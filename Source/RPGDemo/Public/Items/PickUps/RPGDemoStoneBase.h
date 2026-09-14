@@ -16,9 +16,16 @@ UCLASS()
 class RPGDEMO_API ARPGDemoStoneBase : public ARPGDemoPickUpBase
 {
 	GENERATED_BODY()
+	friend class FRPGDemoNetworkRegressionCommand;
 
 public:
-	void Consume(URPGDemoAbilitySystemComponent* AbilitySystemComponent, int32 ApplyLevel);
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	/** Server-authoritative, one-shot consumption. */
+	bool Consume(URPGDemoAbilitySystemComponent* AbilitySystemComponent, int32 ApplyLevel);
+
+	UFUNCTION(BlueprintPure, Category = "RPGDemo|PickUp")
+	bool IsConsumed() const { return bConsumed; }
 
 protected:
 	virtual void OnPickUpCollisionSphereBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) override;
@@ -28,4 +35,13 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly)
 	TSubclassOf<UGameplayEffect> StoneGameplayEffectClass;
+
+private:
+	bool bConsumptionInProgress = false;
+	bool bLocalConsumptionPresented = false;
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastOnStoneConsumed();
+
+	UPROPERTY(Replicated)
+	bool bConsumed = false;
 };

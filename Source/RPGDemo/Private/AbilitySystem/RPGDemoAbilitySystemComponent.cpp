@@ -37,9 +37,21 @@ void URPGDemoAbilitySystemComponent::OnAbilityInputReleased(const FGameplayTag I
 	}
 }
 
+void URPGDemoAbilitySystemComponent::CancelInputHeldAbilities()
+{
+	for (const FGameplayAbilitySpec& Spec : GetActivatableAbilities())
+	{
+		if (Spec.IsActive() &&
+			Spec.GetDynamicSpecSourceTags().HasTag(RPGDemoGameplayTags::InputTag_MustBeHeld))
+		{
+			CancelAbilityHandle(Spec.Handle);
+		}
+	}
+}
+
 void URPGDemoAbilitySystemComponent::GrantHeroWeaponAbilities(const TArray<FRPGDemoHeroAbilitySet>& InDefaultWeaponAbilities, const TArray<FRPGDemoHeroSpecialAbilitySet>& InSpecialWeaponAbilities, int32 ApplyLevel, TArray<FGameplayAbilitySpecHandle>& OutGrantedAbilitySpecHandles)
 {
-	if (InDefaultWeaponAbilities.IsEmpty()) return;
+	if (!GetOwner() || !GetOwner()->HasAuthority() || InDefaultWeaponAbilities.IsEmpty()) return;
 
 	for(const FRPGDemoHeroAbilitySet& AbilitySet : InDefaultWeaponAbilities)
 	{
@@ -66,7 +78,7 @@ void URPGDemoAbilitySystemComponent::GrantHeroWeaponAbilities(const TArray<FRPGD
 
 void URPGDemoAbilitySystemComponent::RemoveGrantedHeroWeaponAbilities(UPARAM(ref)TArray<FGameplayAbilitySpecHandle>& InSpecHandlesToRemove)
 {
-	if (InSpecHandlesToRemove.IsEmpty()) return;
+	if (!GetOwner() || !GetOwner()->HasAuthority() || InSpecHandlesToRemove.IsEmpty()) return;
 
 	for (const FGameplayAbilitySpecHandle& SpecHandle : InSpecHandlesToRemove)
 	{

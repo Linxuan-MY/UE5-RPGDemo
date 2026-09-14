@@ -8,6 +8,10 @@
 void UDataAsset_StartUpDataBase::GiveToAbilitySystemComponent(URPGDemoAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
 {
 	check(InASCToGive);
+	if (!InASCToGive->GetOwner() || !InASCToGive->GetOwner()->HasAuthority())
+	{
+		return;
+	}
 
 	GrantAbilities(ActivateOnGivenAbilities, InASCToGive, ApplyLevel);
 	GrantAbilities(ReactiveAbilities, InASCToGive, ApplyLevel);

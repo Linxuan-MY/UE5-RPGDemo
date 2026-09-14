@@ -7,6 +7,8 @@
 // Sets default values
 ARPGDemoPickUpBase::ARPGDemoPickUpBase()
 {
+	bReplicates = true;
+
 	PrimaryActorTick.bCanEverTick = false;
 
 	PickUpCollisionSphere = CreateDefaultSubobject<USphereComponent>(TEXT("PickUpCollisionSphere"));

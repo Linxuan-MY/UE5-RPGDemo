@@ -8,6 +8,11 @@
 
 void UDataAsset_EnemyStartUpData::GiveToAbilitySystemComponent(URPGDemoAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
 {
+	if (!InASCToGive || !InASCToGive->GetOwner() || !InASCToGive->GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
 	Super::GiveToAbilitySystemComponent(InASCToGive, ApplyLevel);
 
 	if (!EnemyCombatAbilities.IsEmpty())

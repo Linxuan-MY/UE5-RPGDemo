@@ -10,6 +10,10 @@
 #include "Components/UI/HeroUIComponent.h"
 
 #include "RPGDemoDebugHelper.h"
+#include "Net/UnrealNetwork.h"
+#include "Characters/RPGDemoHeroCharacter.h"
+#include "Characters/RPGDemoEnemyCharacter.h"
+#include "GameModes/RPGDemoSurvivalGameMode.h"
 
 URPGDemoAttributeSet::URPGDemoAttributeSet()
 {
@@ -20,6 +24,76 @@ URPGDemoAttributeSet::URPGDemoAttributeSet()
 	InitAttackPower(1.f);
 	InitDefensePower(1.f);
 
+}
+
+void URPGDemoAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME_CONDITION_NOTIFY(URPGDemoAttributeSet, CurrentHealth, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(URPGDemoAttributeSet, MaxHealth, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(URPGDemoAttributeSet, CurrentRage, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(URPGDemoAttributeSet, MaxRage, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(URPGDemoAttributeSet, AttackPower, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(URPGDemoAttributeSet, DefensePower, COND_None, REPNOTIFY_Always);
+}
+
+void URPGDemoAttributeSet::OnRep_CurrentHealth(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(URPGDemoAttributeSet, CurrentHealth, OldValue);
+	BroadcastHealthToUI();
+}
+
+void URPGDemoAttributeSet::OnRep_MaxHealth(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(URPGDemoAttributeSet, MaxHealth, OldValue);
+	BroadcastHealthToUI();
+}
+
+void URPGDemoAttributeSet::OnRep_CurrentRage(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(URPGDemoAttributeSet, CurrentRage, OldValue);
+	BroadcastRageToUI();
+}
+
+void URPGDemoAttributeSet::OnRep_MaxRage(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(URPGDemoAttributeSet, MaxRage, OldValue);
+	BroadcastRageToUI();
+}
+
+void URPGDemoAttributeSet::OnRep_AttackPower(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(URPGDemoAttributeSet, AttackPower, OldValue);
+}
+
+void URPGDemoAttributeSet::OnRep_DefensePower(const FGameplayAttributeData& OldValue)
+{
+	GAMEPLAYATTRIBUTE_REPNOTIFY(URPGDemoAttributeSet, DefensePower, OldValue);
+}
+
+void URPGDemoAttributeSet::BroadcastHealthToUI() const
+{
+	const UAbilitySystemComponent* ASC = GetOwningAbilitySystemComponent();
+	IPawnUIInterface* PawnUIInterface = ASC ? Cast<IPawnUIInterface>(ASC->GetAvatarActor()) : nullptr;
+	UPawnUIComponent* PawnUIComponent = PawnUIInterface ? PawnUIInterface->GetPawnUIComponent() : nullptr;
+	if (PawnUIComponent)
+	{
+		PawnUIComponent->OnCurrentHealthChanged.Broadcast(
+			GetMaxHealth() > 0.f ? GetCurrentHealth() / GetMaxHealth() : 0.f);
+	}
+}
+
+void URPGDemoAttributeSet::BroadcastRageToUI() const
+{
+	const UAbilitySystemComponent* ASC = GetOwningAbilitySystemComponent();
+	IPawnUIInterface* PawnUIInterface = ASC ? Cast<IPawnUIInterface>(ASC->GetAvatarActor()) : nullptr;
+	UHeroUIComponent* HeroUIComponent = PawnUIInterface ? PawnUIInterface->GetHeroUIComponent() : nullptr;
+	if (HeroUIComponent)
+	{
+		HeroUIComponent->OnCurrentRageChanged.Broadcast(
+			GetMaxRage() > 0.f ? GetCurrentRage() / GetMaxRage() : 0.f);
+	}
 }
 
 void URPGDemoAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
@@ -52,10 +126,12 @@ void URPGDemoAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCal
 
 		if (GetCurrentRage() == GetMaxRage())
 		{
+			URPGDemoFunctionLibrary::RemoveGameplayTagFromActorIfFound(Data.Target.GetAvatarActor(), RPGDemoGameplayTags::Player_Status_Rage_None);
 			URPGDemoFunctionLibrary::AddGameplayTagToActorIfNone(Data.Target.GetAvatarActor(), RPGDemoGameplayTags::Player_Status_Rage_Full);
 		}
 		else if (GetCurrentRage() == 0.f)
 		{
+			URPGDemoFunctionLibrary::RemoveGameplayTagFromActorIfFound(Data.Target.GetAvatarActor(), RPGDemoGameplayTags::Player_Status_Rage_Full);
 			URPGDemoFunctionLibrary::AddGameplayTagToActorIfNone(Data.Target.GetAvatarActor(), RPGDemoGameplayTags::Player_Status_Rage_None);
 		}
 		else
@@ -95,7 +171,23 @@ void URPGDemoAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCal
 
 		if (GetCurrentHealth() == 0.f)
 		{
+			if (ARPGDemoEnemyCharacter* Enemy = Cast<ARPGDemoEnemyCharacter>(Data.Target.GetAvatarActor()))
+			{
+				Enemy->BeginReplicatedDeathPresentation();
+			}
+
 			URPGDemoFunctionLibrary::AddGameplayTagToActorIfNone(Data.Target.GetAvatarActor(), RPGDemoGameplayTags::Shared_Status_Dead);
+
+			if (Data.Target.GetAvatarActor()->IsA<ARPGDemoHeroCharacter>())
+			{
+				if (UWorld* World = Data.Target.GetAvatarActor()->GetWorld())
+				{
+					if (ARPGDemoSurvivalGameMode* SurvivalGameMode = World->GetAuthGameMode<ARPGDemoSurvivalGameMode>())
+					{
+						SurvivalGameMode->NotifyPlayerDied();
+					}
+				}
+			}
 		}
 
 	}

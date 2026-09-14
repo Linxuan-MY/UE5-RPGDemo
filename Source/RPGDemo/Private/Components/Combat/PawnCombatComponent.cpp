@@ -9,10 +9,30 @@
 
 void UPawnCombatComponent::RegisterSpawnedWeapon(FGameplayTag InWeaponTagToRegister, ARPGDemoWeaponBase* InWeaponToRegister, bool bReigsterAsEquippedWeapon)
 {
-	checkf(!CharacterCarriedWeaponMap.Contains(InWeaponTagToRegister), TEXT("Weapon with tag %s is already registered to character!"), *InWeaponTagToRegister.ToString());
 	check(InWeaponToRegister);
 
+	if (ARPGDemoWeaponBase* ExistingWeapon = GetCharacterCarriedWeaponByTag(InWeaponTagToRegister))
+	{
+		if (IsValid(ExistingWeapon))
+		{
+			UE_LOG(LogTemp, Verbose, TEXT("Ignoring duplicate weapon registration for tag %s on %s."),
+				*InWeaponTagToRegister.ToString(), *GetNameSafe(GetOwningPawn()));
+			return;
+		}
+
+		CharacterCarriedWeaponMap.Remove(InWeaponTagToRegister);
+	}
+
 	CharacterCarriedWeaponMap.Emplace(InWeaponTagToRegister, InWeaponToRegister);
+
+	if (GetOwningPawn()->HasAuthority())
+	{
+		InWeaponToRegister->SetOwner(GetOwningPawn());
+		InWeaponToRegister->SetInstigator(GetOwningPawn());
+		InWeaponToRegister->SetWeaponRegistrationData(InWeaponTagToRegister, bReigsterAsEquippedWeapon);
+	}
+	InWeaponToRegister->SetActorHiddenInGame(false);
+	InWeaponToRegister->SetActorEnableCollision(true);
 
 	InWeaponToRegister->OnWeaponHitTarget.BindUObject(this, &ThisClass::OnHitTargetActor);
 	InWeaponToRegister->OnWeaponPulledFromTarget.BindUObject(this, &ThisClass::OnWeaponPulledFromTargetActor);
@@ -21,8 +41,6 @@ void UPawnCombatComponent::RegisterSpawnedWeapon(FGameplayTag InWeaponTagToRegis
 	{
 		CurrentlyEquippedWeaponTag = InWeaponTagToRegister;
 	}
-
-
 }
 
 ARPGDemoWeaponBase* UPawnCombatComponent::GetCharacterCarriedWeaponByTag(FGameplayTag InWeaponTagToGet) const
@@ -52,6 +70,15 @@ ARPGDemoWeaponBase* UPawnCombatComponent::GetCharacterCurrentlyEquippedWeapon() 
 
 void UPawnCombatComponent::ToggleWeaponCollision(bool bShouldEnable, EToggleDamageType ToggleDamageType)
 {
+	// Anim notifies run on every network copy of a character. Only the authority may
+	// enable hit collision; client-side weapon maps are presentation state and may
+	// not have been rebuilt yet when a replicated attack montage starts.
+	const APawn* OwningPawn = GetOwningPawn();
+	if (!OwningPawn || !OwningPawn->HasAuthority())
+	{
+		return;
+	}
+
 	if (ToggleDamageType == EToggleDamageType::CurrentEquippedWeapon)
 	{
 		ToggleCurrentEquippedWeaponCollision(bShouldEnable);
@@ -60,8 +87,6 @@ void UPawnCombatComponent::ToggleWeaponCollision(bool bShouldEnable, EToggleDama
 	{
 		ToggleBodyCollision(bShouldEnable, ToggleDamageType);
 	}
-
-
 }
 
 void UPawnCombatComponent::OnHitTargetActor(AActor* HitActor)
@@ -75,17 +100,23 @@ void UPawnCombatComponent::OnWeaponPulledFromTargetActor(AActor* InteractedActor
 void UPawnCombatComponent::ToggleCurrentEquippedWeaponCollision(bool bShouldEnable)
 {
 	ARPGDemoWeaponBase* WeaponToToggle = GetCharacterCurrentlyEquippedWeapon();
-
-	check(WeaponToToggle);
+	if (!IsValid(WeaponToToggle) || !IsValid(WeaponToToggle->GetWeaponCollisionBox()))
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("Cannot %s weapon collision for %s: no valid weapon is registered for equipped tag '%s'."),
+			bShouldEnable ? TEXT("enable") : TEXT("disable"),
+			*GetNameSafe(GetOwningPawn()),
+			*CurrentlyEquippedWeaponTag.ToString());
+		return;
+	}
 
 	if (bShouldEnable)
 	{
 		WeaponToToggle->GetWeaponCollisionBox()->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-
 	}
-	else {
+	else
+	{
 		WeaponToToggle->GetWeaponCollisionBox()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
 		OverlappedActors.Empty();
 	}
 }

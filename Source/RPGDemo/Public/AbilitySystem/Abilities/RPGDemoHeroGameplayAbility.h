@@ -20,6 +20,9 @@ class RPGDEMO_API URPGDemoHeroGameplayAbility : public URPGDemoGameplayAbility
 	GENERATED_BODY()
 
 public:
+	virtual void ApplyCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo) const override;
+
 	UFUNCTION(BlueprintPure, Category = "RPGDemo|Ability")
 	ARPGDemoHeroCharacter* GetHeroCharacterFromActorInfo();
 

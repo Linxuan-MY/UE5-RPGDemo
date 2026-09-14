@@ -11,6 +11,9 @@
 
 ARPGDemoProjectileBase::ARPGDemoProjectileBase()
 {
+	bReplicates = true;
+	SetReplicateMovement(true);
+
 	PrimaryActorTick.bCanEverTick = false;
 
 	ProjectileCollisionBox = CreateDefaultSubobject<UBoxComponent>(TEXT("ProjectileCollisionBox"));
@@ -48,11 +51,19 @@ void ARPGDemoProjectileBase::BeginPlay()
 void ARPGDemoProjectileBase::OnProjectileHit(UPrimitiveComponent* HitComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
 {
+	if (!HasAuthority() || bImpactProcessed)
+	{
+		return;
+	}
+
+	bImpactProcessed = true;
+	ProjectileCollisionBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
 	APawn* HitPawn = Cast<APawn>(OtherActor);
 
 	if (!HitPawn || !CanDamageHitPawn(HitPawn))
 	{
-		BP_OnSpawnProjectileHitFX(Hit.ImpactPoint);
+		MulticastProjectileImpact(Hit.ImpactPoint, ++ImpactSequence);
 		Destroy();
 		return;
 	}
@@ -63,6 +74,11 @@ void ARPGDemoProjectileBase::OnProjectileHit(UPrimitiveComponent* HitComponent, 
 void ARPGDemoProjectileBase::OnProjectileBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
+	if (!HasAuthority() || bImpactProcessed)
+	{
+		return;
+	}
+
 	if (OverlappedActors.Contains(OtherActor))
 	{
 		return;
@@ -79,6 +95,7 @@ void ARPGDemoProjectileBase::OnProjectileBeginOverlap(UPrimitiveComponent* Overl
 		if (URPGDemoFunctionLibrary::TargetPawnHostile(GetInstigator(), HitPawn))
 		{
 			HandleApplyProjectileDamage(HitPawn, Data);
+			MulticastProjectileImpact(bFromSweep ? FVector(SweepResult.ImpactPoint) : GetActorLocation(), ++ImpactSequence);
 		}
 	}
 }
@@ -94,7 +111,7 @@ bool ARPGDemoProjectileBase::CanDamageHitPawn(APawn* InHitPawn) const
 
 void ARPGDemoProjectileBase::HandleProjectileImpact(APawn* InHitPawn, const FVector& InImpactPoint)
 {
-	BP_OnSpawnProjectileHitFX(InImpactPoint);
+	MulticastProjectileImpact(InImpactPoint, ++ImpactSequence);
 
 	bool bIsValidBlock = false;
 	const bool bIsPlayerBlocking = URPGDemoFunctionLibrary::NativeDoesActorHaveTag(InHitPawn, RPGDemoGameplayTags::Player_Status_Block);
@@ -137,5 +154,18 @@ void ARPGDemoProjectileBase::HandleApplyProjectileDamage(APawn* InHitPawn, const
 			RPGDemoGameplayTags::Shared_Event_HitReact,
 			InPayload
 			);
+	}
+}
+
+void ARPGDemoProjectileBase::MulticastProjectileImpact_Implementation(const FVector_NetQuantize& ImpactPoint, uint32 Sequence)
+{
+	if (Sequence <= LastImpactSequence)
+	{
+		return;
+	}
+	LastImpactSequence = Sequence;
+	if (GetNetMode() != NM_DedicatedServer)
+	{
+		BP_OnSpawnProjectileHitFX(ImpactPoint);
 	}
 }

@@ -36,8 +36,11 @@ public:
 	//~ End PawnUIInterface interface
 
 protected:
+	virtual void BeginPlay() override;
+
 	//~ Begin APawn interface
 	virtual void PossessedBy(AController* NewController) override;
+	virtual void OnRep_Controller() override;
 	//~ End APawn interface
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AbilitySystem")

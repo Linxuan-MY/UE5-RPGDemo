@@ -16,6 +16,9 @@
 #include "Components/UI/HeroUIComponent.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "GameModes/RPGDemoBaseGameMode.h"
+#include "Net/UnrealNetwork.h"
+#include "EngineUtils.h"
+#include "Items/PickUps/RPGDemoStoneBase.h"
 
 #include "RPGDemoDebugHelper.h"
 
@@ -47,6 +50,12 @@ ARPGDemoHeroCharacter::ARPGDemoHeroCharacter()
 
 	HeroUIComponent = CreateDefaultSubobject<UHeroUIComponent>(TEXT("HeroUIComponent"));
 
+}
+
+void ARPGDemoHeroCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ARPGDemoHeroCharacter, ReplicatedMovementInputDirection);
 }
 
 UPawnCombatComponent* ARPGDemoHeroCharacter::GetPawnCombatComponent() const
@@ -140,22 +149,48 @@ void ARPGDemoHeroCharacter::Input_Move(const FInputActionValue& InputActionValue
 	const FVector2D MovementVector = InputActionValue.Get<FVector2D>();
 
 	const FRotator MovementRotation(0.f, Controller->GetControlRotation().Yaw, 0.f);
+	const FVector ForwardDirection = MovementRotation.RotateVector(FVector::ForwardVector);
+	const FVector RightDirection = MovementRotation.RotateVector(FVector::RightVector);
+	const FVector DesiredDirection =
+		(ForwardDirection * MovementVector.Y + RightDirection * MovementVector.X).GetSafeNormal2D();
+
+	if (!DesiredDirection.IsNearlyZero() &&
+		!DesiredDirection.Equals(ReplicatedMovementInputDirection, 0.01f))
+	{
+		ReplicatedMovementInputDirection = DesiredDirection;
+		if (!HasAuthority())
+		{
+			ServerUpdateMovementInputDirection(DesiredDirection);
+		}
+	}
 
 	if (MovementVector.Y != 0.f)
 	{
-		const FVector ForwardDirection = MovementRotation.RotateVector(FVector::ForwardVector);
-
 		AddMovementInput(ForwardDirection, MovementVector.Y);
 
 	}
 
 	if(MovementVector.X != 0.f)
 	{
-		const FVector RightDirection = MovementRotation.RotateVector(FVector::RightVector);
-
 		AddMovementInput(RightDirection, MovementVector.X);
 	}
 
+}
+
+void ARPGDemoHeroCharacter::ServerUpdateMovementInputDirection_Implementation(
+	FVector_NetQuantizeNormal NewDirection)
+{
+	const FVector SafeDirection = FVector(NewDirection).GetSafeNormal2D();
+	if (!SafeDirection.IsNearlyZero())
+	{
+		ReplicatedMovementInputDirection = SafeDirection;
+	}
+}
+
+FVector ARPGDemoHeroCharacter::GetNetworkMovementInputDirection() const
+{
+	const FVector Direction = FVector(ReplicatedMovementInputDirection).GetSafeNormal2D();
+	return Direction.IsNearlyZero() ? GetActorForwardVector().GetSafeNormal2D() : Direction;
 }
 
 void ARPGDemoHeroCharacter::Input_Look(const FInputActionValue& InputActionValue)
@@ -191,13 +226,41 @@ void ARPGDemoHeroCharacter::Input_SwitchTargetCompleted(const FInputActionValue&
 
 void ARPGDemoHeroCharacter::Input_PickUpStoneStarted(const FInputActionValue& InputActionValue)
 {
-	FGameplayEventData Data;
+	if (HasAuthority())
+	{
+		TryConsumeNearbyStones();
+	}
+	else
+	{
+		ServerTryConsumeNearbyStones();
+	}
+}
 
-	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
-		this,
-		RPGDemoGameplayTags::Player_Event_ConsumeStones,
-		Data
-		);
+void ARPGDemoHeroCharacter::ServerTryConsumeNearbyStones_Implementation()
+{
+	TryConsumeNearbyStones();
+}
+
+void ARPGDemoHeroCharacter::TryConsumeNearbyStones()
+{
+	if (!HasAuthority() || !RPGDemoAbilitySystemComponent ||
+		RPGDemoAbilitySystemComponent->HasMatchingGameplayTag(RPGDemoGameplayTags::Shared_Status_Dead))
+	{
+		return;
+	}
+
+	const float MaxDistanceSquared = FMath::Square(FMath::Max(StonePickUpRequestRadius, 0.f));
+	for (TActorIterator<ARPGDemoStoneBase> It(GetWorld()); It; ++It)
+	{
+		ARPGDemoStoneBase* Stone = *It;
+		if (!IsValid(Stone) || Stone->IsConsumed() ||
+			FVector::DistSquared(GetActorLocation(), Stone->GetActorLocation()) > MaxDistanceSquared)
+		{
+			continue;
+		}
+
+		Stone->Consume(RPGDemoAbilitySystemComponent, 1);
+	}
 }
 
 void ARPGDemoHeroCharacter::Input_AbilityInputPressed(FGameplayTag InInputTag)

@@ -4,20 +4,10 @@
 
 #include "CoreMinimal.h"
 #include "GameModes/RPGDemoBaseGameMode.h"
+#include "GameModes/RPGDemoGameState.h"
 #include "RPGDemoSurvivalGameMode.generated.h"
 
 class ARPGDemoEnemyCharacter;
-
-UENUM( BlueprintType )
-enum class ERPGDemoSurvivalGameModeState : uint8
-{
-	WaitSpawnNewWave,
-	SpawningNewWave,
-	InProgress,
-	WaveCompleted,
-	AllWavesDone,
-	PlayerDied
-};
 
 USTRUCT(BlueprintType)
 struct FRPGDemoEnemyWaveSpawnerInfo
@@ -73,7 +63,7 @@ private:
 	void OnEnemyDestroyed(AActor* DestroyedActor);
 
 	UPROPERTY()
-	ERPGDemoSurvivalGameModeState CurrentSurvivalGameModeState;
+	ERPGDemoSurvivalGameModeState CurrentSurvivalGameModeState = ERPGDemoSurvivalGameModeState::WaitSpawnNewWave;
 
 	UPROPERTY(BlueprintAssignable, BlueprintCallable)
 	FOnSurvivalGameModeStateChangedDelegate OnSurvivalGameModeStateChanged;
@@ -114,4 +104,7 @@ private:
 public:
 	UFUNCTION(BlueprintCallable)
 	void RegisterSpawnedEnemies(const TArray<ARPGDemoEnemyCharacter*>& InEnemiesToRegister);
+
+	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Survival")
+	void NotifyPlayerDied();
 };

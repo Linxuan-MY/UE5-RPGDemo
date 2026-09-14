@@ -25,9 +25,18 @@ void URPGDemoFunctionLibrary::AddGameplayTagToActorIfNone(AActor* InActor, FGame
 {
 	URPGDemoAbilitySystemComponent* ASC = NativeGetRPGDemoASCFromActor(InActor);
 
+	// Attribute-owned state is never predicted; other Blueprint helper tags stay local.
+	const bool bAuthoritativeState = TagToAdd == RPGDemoGameplayTags::Player_Status_Rage_Full ||
+		TagToAdd == RPGDemoGameplayTags::Player_Status_Rage_None || TagToAdd == RPGDemoGameplayTags::Shared_Status_Dead;
+	if (bAuthoritativeState && !InActor->HasAuthority())
+	{
+		return;
+	}
+
 	if(!ASC->HasMatchingGameplayTag(TagToAdd))
 	{
-		ASC->AddLooseGameplayTag(TagToAdd);
+		ASC->AddLooseGameplayTag(TagToAdd, 1, bAuthoritativeState ?
+			EGameplayTagReplicationState::TagAndCountToAll : EGameplayTagReplicationState::None);
 	}
 }
 
@@ -35,9 +44,18 @@ void URPGDemoFunctionLibrary::RemoveGameplayTagFromActorIfFound(AActor* InActor,
 {
 	URPGDemoAbilitySystemComponent* ASC = NativeGetRPGDemoASCFromActor(InActor);
 
+	// Attribute-owned state is never predicted; other Blueprint helper tags stay local.
+	const bool bAuthoritativeState = TagToRemove == RPGDemoGameplayTags::Player_Status_Rage_Full ||
+		TagToRemove == RPGDemoGameplayTags::Player_Status_Rage_None || TagToRemove == RPGDemoGameplayTags::Shared_Status_Dead;
+	if (bAuthoritativeState && !InActor->HasAuthority())
+	{
+		return;
+	}
+
 	if(ASC->HasMatchingGameplayTag(TagToRemove))
 	{
-		ASC->RemoveLooseGameplayTag(TagToRemove);
+		ASC->RemoveLooseGameplayTag(TagToRemove, 1, bAuthoritativeState ?
+			EGameplayTagReplicationState::TagAndCountToAll : EGameplayTagReplicationState::None);
 	}
 }
 
@@ -231,16 +249,53 @@ void URPGDemoFunctionLibrary::ToggleInputMode(const UObject* WorldContextObject,
 
 	FInputModeGameOnly GameOnlyMode;
 	FInputModeUIOnly UIOnlyMode;
+	FInputModeGameAndUI GameAndUIMode;
+	GameAndUIMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	GameAndUIMode.SetHideCursorDuringCapture(false);
+
+	const bool bNetworkedWorld = PlayerController->GetNetMode() != NM_Standalone;
 
 	switch (InInputMode)
 	{
 		case ERPGDemoInputMode::GameOnly:
 			PlayerController->SetInputMode(GameOnlyMode);
 			PlayerController->bShowMouseCursor = false;
+			PlayerController->ResetIgnoreMoveInput();
+			PlayerController->ResetIgnoreLookInput();
+			if (APawn* ControlledPawn = PlayerController->GetPawn())
+			{
+				ControlledPawn->EnableInput(PlayerController);
+			}
 			break;
 
 		case ERPGDemoInputMode::UIOnly:
-			PlayerController->SetInputMode(UIOnlyMode);
+			if (bNetworkedWorld)
+			{
+				if (URPGDemoAbilitySystemComponent* ASC =
+					Cast<URPGDemoAbilitySystemComponent>(
+						UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(PlayerController->GetPawn())))
+				{
+					// Enhanced Input will not emit Completed after the pawn is disabled.
+					// Release hold abilities (block, etc.) before consuming gameplay input.
+					ASC->CancelInputHeldAbilities();
+				}
+
+				// Multiple PIE windows share Slate user 0. UIOnly gives the newest
+				// pause menu exclusive routing and makes an already-open menu
+				// unclickable. GameAndUI keeps both viewports interactive while the
+				// controlled pawn is disabled locally.
+				PlayerController->SetInputMode(GameAndUIMode);
+				PlayerController->SetIgnoreMoveInput(true);
+				PlayerController->SetIgnoreLookInput(true);
+				if (APawn* ControlledPawn = PlayerController->GetPawn())
+				{
+					ControlledPawn->DisableInput(PlayerController);
+				}
+			}
+			else
+			{
+				PlayerController->SetInputMode(UIOnlyMode);
+			}
 			PlayerController->bShowMouseCursor = true;
 			break;
 
@@ -273,4 +328,16 @@ bool URPGDemoFunctionLibrary::TryLoadSavedGameDifficulty(ERPGDemoGameDifficulty&
 		}
 	}
 	return false;
+}
+
+FText URPGDemoFunctionLibrary::GetGameDifficultyDisplayText(ERPGDemoGameDifficulty GameDifficulty)
+{
+	switch (GameDifficulty)
+	{
+	case ERPGDemoGameDifficulty::Easy: return NSLOCTEXT("RPGDemoDifficulty", "Easy", "Easy");
+	case ERPGDemoGameDifficulty::Normal: return NSLOCTEXT("RPGDemoDifficulty", "Normal", "Normal");
+	case ERPGDemoGameDifficulty::Hard: return NSLOCTEXT("RPGDemoDifficulty", "Hard", "Hard");
+	case ERPGDemoGameDifficulty::ExtremelyHard: return NSLOCTEXT("RPGDemoDifficulty", "ExtremelyHard", "Extremely Hard");
+	default: return NSLOCTEXT("RPGDemoDifficulty", "Unknown", "Unknown");
+	}
 }

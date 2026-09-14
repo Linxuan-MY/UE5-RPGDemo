@@ -7,19 +7,56 @@
 #include "AbilitySystemBlueprintLibrary.h"
 #include "RPGDemoFunctionLibrary.h"
 #include "RPGDemoGameplayTags.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 
 void URPGDemoGameplayAbility::OnGiveAbility(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec)
 {
 	Super::OnGiveAbility(ActorInfo, Spec);
 
-	if(AbilityActivationPolicy == ERPGDemoAbilityActivationPolicy::OnGiven)
+	if (AbilityActivationPolicy == ERPGDemoAbilityActivationPolicy::OnGiven)
 	{
-		if(ActorInfo && !Spec.IsActive())
+		if (!ActorInfo || Spec.IsActive())
 		{
-			ActorInfo->AbilitySystemComponent->TryActivateAbility(Spec.Handle);
+			return;
+		}
+
+		const bool bAuthorityPolicy =
+			NetExecutionPolicy == EGameplayAbilityNetExecutionPolicy::ServerOnly ||
+			NetExecutionPolicy == EGameplayAbilityNetExecutionPolicy::ServerInitiated;
+		const bool bShouldActivate = bAuthorityPolicy
+			? ActorInfo->IsNetAuthority()
+			: ActorInfo->IsLocallyControlled();
+
+		if (!bShouldActivate)
+		{
+			return;
+		}
+
+		// OnGiveAbility can run while a replicated spec is still being inserted on the
+		// owning client. Activating on the next tick avoids an invalid SpecHandle and
+		// also keeps local-only UI abilities off remote server controller copies.
+		TWeakObjectPtr<UAbilitySystemComponent> WeakASC = ActorInfo->AbilitySystemComponent.Get();
+		const FGameplayAbilitySpecHandle SpecHandle = Spec.Handle;
+		UWorld* World = ActorInfo->AvatarActor.IsValid()
+			? ActorInfo->AvatarActor->GetWorld()
+			: nullptr;
+		if (World)
+		{
+			World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this,
+				[WeakASC, SpecHandle]()
+				{
+					if (UAbilitySystemComponent* ASC = WeakASC.Get())
+					{
+						if (FGameplayAbilitySpec* CurrentSpec = ASC->FindAbilitySpecFromHandle(SpecHandle);
+							CurrentSpec && !CurrentSpec->IsActive())
+						{
+							ASC->TryActivateAbility(SpecHandle);
+						}
+					}
+				}));
 		}
 	}
-
 }
 
 void URPGDemoGameplayAbility::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
@@ -28,7 +65,7 @@ void URPGDemoGameplayAbility::EndAbility(const FGameplayAbilitySpecHandle Handle
 
 	if (AbilityActivationPolicy == ERPGDemoAbilityActivationPolicy::OnGiven)
 	{
-		if(ActorInfo)
+		if (ActorInfo && ActorInfo->IsNetAuthority())
 		{
 			ActorInfo->AbilitySystemComponent->ClearAbility(Handle);
 		}

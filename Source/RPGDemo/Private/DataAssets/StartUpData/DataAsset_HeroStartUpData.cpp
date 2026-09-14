@@ -10,6 +10,11 @@
 
 void UDataAsset_HeroStartUpData::GiveToAbilitySystemComponent(URPGDemoAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
 {
+	if (!InASCToGive || !InASCToGive->GetOwner() || !InASCToGive->GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
 	Super::GiveToAbilitySystemComponent(InASCToGive, ApplyLevel);
 	for (const FRPGDemoHeroAbilitySet& AbilitySet : HeroStartUpAbilitySets)
 	{

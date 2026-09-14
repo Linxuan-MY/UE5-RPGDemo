@@ -8,6 +8,7 @@
 
 class UAIPerceptionComponent;
 class UAISenseConfig_Sight;
+class UBlackboardComponent;
 
 /**
  * 
@@ -36,6 +37,10 @@ protected:
 	UFUNCTION()
 	virtual void OnEnemyPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus);
 
+	AActor* FindNearestPerceivedHostile(const AActor* ExcludedActor = nullptr) const;
+	void SetTargetActor(UBlackboardComponent& BlackboardComponent, AActor* NewTarget, const TCHAR* SwitchReason);
+	bool IsTargetSwitchLocked() const;
+
 private:
 	UPROPERTY(EditDefaultsOnly, Category = "Detour Crowd Avoidance Config")
 	bool bEnableDetourCrowdAvoidance = true;
@@ -45,4 +50,15 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Detour Crowd Avoidance Config", meta = (EditCondition = "bEnableDetourCrowdAvoidance"))
 	float CollisionQueryRange = 600.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Target Selection", meta = (ClampMin = "0.0", UIMin = "0.0", Units = "s"))
+	float MinimumTargetLockDuration = 3.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Target Selection", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+	float TargetSwitchDistanceRatio = 0.75f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Target Selection", meta = (ClampMin = "0.0", UIMin = "0.0", Units = "cm"))
+	float TargetSwitchMinDistanceAdvantage = 300.0f;
+
+	double TargetLockEndTime = 0.0;
 };

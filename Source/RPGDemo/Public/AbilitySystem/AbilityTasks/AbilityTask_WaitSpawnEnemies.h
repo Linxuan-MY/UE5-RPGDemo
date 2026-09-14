@@ -7,6 +7,7 @@
 #include "AbilityTask_WaitSpawnEnemies.generated.h"
 
 class ARPGDemoEnemyCharacter;
+struct FStreamableHandle;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWaitSpawnEnemiesDelegate, const TArray<ARPGDemoEnemyCharacter*>&, SpawnedEnemies);
 
@@ -41,6 +42,11 @@ public:
 	//~ End UGameplayTask interface
 
 private:
+	bool HasSpawnAuthority() const;
+	void FailAndEndTask();
+	TSharedPtr<FStreamableHandle> SpawnClassHandle;
+	bool bSpawnRequested = false;
+	bool bTaskEnded = false;
 	FGameplayTag CachedEventTag;
 	TSoftClassPtr<ARPGDemoEnemyCharacter> CachedSoftEnemyClassToSpawn;
 	int32 CachedNumToSpawn;

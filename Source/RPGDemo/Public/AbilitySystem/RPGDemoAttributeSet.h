@@ -27,29 +27,30 @@ public:
 	URPGDemoAttributeSet();
 
 	virtual void PostGameplayEffectExecute(const struct FGameplayEffectModCallbackData& Data) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 
-	UPROPERTY(BlueprintReadOnly, Category = "Health")
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_CurrentHealth, Category = "Health")
 	FGameplayAttributeData CurrentHealth;
 	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, CurrentHealth)
 
-	UPROPERTY(BlueprintReadOnly, Category = "Health")
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_MaxHealth, Category = "Health")
 	FGameplayAttributeData MaxHealth;
 	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, MaxHealth)
 
-	UPROPERTY(BlueprintReadOnly, Category = "Rage")
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_CurrentRage, Category = "Rage")
 	FGameplayAttributeData CurrentRage;
 	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, CurrentRage)
 
-	UPROPERTY(BlueprintReadOnly, Category = "Rage")
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_MaxRage, Category = "Rage")
 	FGameplayAttributeData MaxRage;
 	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, MaxRage)
 
-	UPROPERTY(BlueprintReadOnly, Category = "Damage")
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_AttackPower, Category = "Damage")
 	FGameplayAttributeData AttackPower;
 	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, AttackPower)
 
-	UPROPERTY(BlueprintReadOnly, Category = "Damage")
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_DefensePower, Category = "Damage")
 	FGameplayAttributeData DefensePower;
 	ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, DefensePower)
 
@@ -59,5 +60,20 @@ public:
 
 private:
 	TWeakInterfacePtr<IPawnUIInterface> CachedPawnUIInterface;
+	void BroadcastHealthToUI() const;
+	void BroadcastRageToUI() const;
+
+	UFUNCTION()
+	void OnRep_CurrentHealth(const FGameplayAttributeData& OldValue);
+	UFUNCTION()
+	void OnRep_MaxHealth(const FGameplayAttributeData& OldValue);
+	UFUNCTION()
+	void OnRep_CurrentRage(const FGameplayAttributeData& OldValue);
+	UFUNCTION()
+	void OnRep_MaxRage(const FGameplayAttributeData& OldValue);
+	UFUNCTION()
+	void OnRep_AttackPower(const FGameplayAttributeData& OldValue);
+	UFUNCTION()
+	void OnRep_DefensePower(const FGameplayAttributeData& OldValue);
 
 };

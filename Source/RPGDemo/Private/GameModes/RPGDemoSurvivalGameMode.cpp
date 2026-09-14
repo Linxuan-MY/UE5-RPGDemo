@@ -9,15 +9,29 @@
 #include "Engine/TargetPoint.h"
 #include "NavigationSystem.h"
 #include "RPGDemoFunctionLibrary.h"
+#include "GameModes/RPGDemoGameState.h"
 
 void ARPGDemoSurvivalGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
 	Super::InitGame(MapName, Options, ErrorMessage);
 
-	ERPGDemoGameDifficulty SavedGameDifficulty;
-	if (URPGDemoFunctionLibrary::TryLoadSavedGameDifficulty(SavedGameDifficulty))
+	if (UGameplayStatics::HasOption(Options, TEXT("RPGDemoMultiplayer")))
 	{
-		CurrentGameDifficulty = SavedGameDifficulty;
+		const FString DifficultyOption = UGameplayStatics::ParseOption(Options, TEXT("RPGDemoDifficulty"));
+		if (DifficultyOption == TEXT("Easy")) CurrentGameDifficulty = ERPGDemoGameDifficulty::Easy;
+		else if (DifficultyOption == TEXT("Normal")) CurrentGameDifficulty = ERPGDemoGameDifficulty::Normal;
+		else if (DifficultyOption == TEXT("Hard")) CurrentGameDifficulty = ERPGDemoGameDifficulty::Hard;
+		else if (DifficultyOption == TEXT("ExtremelyHard")) CurrentGameDifficulty = ERPGDemoGameDifficulty::ExtremelyHard;
+		else
+		{
+			CurrentGameDifficulty = ERPGDemoGameDifficulty::Normal;
+			UE_LOG(LogTemp, Warning, TEXT("Invalid multiplayer difficulty '%s'; falling back to Normal."), *DifficultyOption);
+		}
+	}
+	else
+	{
+		ERPGDemoGameDifficulty SavedGameDifficulty;
+		if (URPGDemoFunctionLibrary::TryLoadSavedGameDifficulty(SavedGameDifficulty)) CurrentGameDifficulty = SavedGameDifficulty;
 	}
 }
 
@@ -30,6 +44,10 @@ void ARPGDemoSurvivalGameMode::BeginPlay()
 	SetCurrentSurvivalGameModeState(ERPGDemoSurvivalGameModeState::WaitSpawnNewWave);
 
 	TotalWavesToSpawn = EnemyWaveSpawnerDataTable->GetRowNames().Num();
+	if (ARPGDemoGameState* RPGDemoGameState = GetGameState<ARPGDemoGameState>())
+	{
+		RPGDemoGameState->SetWaveProgress(CurrentWaveCount, TotalWavesToSpawn);
+	}
 
 	PreLoadNextWaveEnemies();
 }
@@ -74,6 +92,11 @@ void ARPGDemoSurvivalGameMode::Tick(float DeltaTime)
 
 			CurrentWaveCount++;
 
+			if (ARPGDemoGameState* RPGDemoGameState = GetGameState<ARPGDemoGameState>())
+			{
+				RPGDemoGameState->SetWaveProgress(CurrentWaveCount, TotalWavesToSpawn);
+			}
+
 			if (HasFinishedAllWaves())
 			{
 				SetCurrentSurvivalGameModeState(ERPGDemoSurvivalGameModeState::AllWavesDone);
@@ -85,6 +108,7 @@ void ARPGDemoSurvivalGameMode::Tick(float DeltaTime)
 			}
 		}
 	}
+
 }
 
 void ARPGDemoSurvivalGameMode::SetCurrentSurvivalGameModeState(ERPGDemoSurvivalGameModeState NewState)
@@ -92,6 +116,11 @@ void ARPGDemoSurvivalGameMode::SetCurrentSurvivalGameModeState(ERPGDemoSurvivalG
 	CurrentSurvivalGameModeState = NewState;
 
 	OnSurvivalGameModeStateChanged.Broadcast(CurrentSurvivalGameModeState);
+
+	if (ARPGDemoGameState* RPGDemoGameState = GetGameState<ARPGDemoGameState>())
+	{
+		RPGDemoGameState->SetSurvivalState(CurrentSurvivalGameModeState);
+	}
 }
 
 bool ARPGDemoSurvivalGameMode::HasFinishedAllWaves() const
@@ -229,5 +258,14 @@ void ARPGDemoSurvivalGameMode::RegisterSpawnedEnemies(const TArray<ARPGDemoEnemy
 
 			Enemy->OnDestroyed.AddUniqueDynamic(this, &ThisClass::OnEnemyDestroyed);
 		}
+	}
+}
+
+void ARPGDemoSurvivalGameMode::NotifyPlayerDied()
+{
+	if (HasAuthority() && CurrentSurvivalGameModeState != ERPGDemoSurvivalGameModeState::PlayerDied &&
+		CurrentSurvivalGameModeState != ERPGDemoSurvivalGameModeState::AllWavesDone)
+	{
+		SetCurrentSurvivalGameModeState(ERPGDemoSurvivalGameModeState::PlayerDied);
 	}
 }

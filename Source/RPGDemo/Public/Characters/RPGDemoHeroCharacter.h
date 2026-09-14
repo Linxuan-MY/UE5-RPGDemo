@@ -20,9 +20,11 @@ UCLASS()
 class RPGDEMO_API ARPGDemoHeroCharacter : public ARPGDemoBaseCharacter
 {
 	GENERATED_BODY()
+	friend class FRPGDemoNetworkRegressionCommand;
 
 public:
 	ARPGDemoHeroCharacter();
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	//~ Begin PawnCombatInterface interface
 	virtual UPawnCombatComponent* GetPawnCombatComponent() const override;
@@ -76,9 +78,22 @@ private:
 	void Input_SwitchTargetCompleted(const FInputActionValue& InputActionValue);
 
 	void Input_PickUpStoneStarted(const FInputActionValue& InputActionValue);
+	void TryConsumeNearbyStones();
+
+	UFUNCTION(Server, Reliable)
+	void ServerTryConsumeNearbyStones();
 
 	void Input_AbilityInputPressed(FGameplayTag InInputTag);
 	void Input_AbilityInputReleased(FGameplayTag InInputTag);
+
+	UFUNCTION(Server, Unreliable)
+	void ServerUpdateMovementInputDirection(FVector_NetQuantizeNormal NewDirection);
+
+	UPROPERTY(Replicated)
+	FVector_NetQuantizeNormal ReplicatedMovementInputDirection = FVector::ForwardVector;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Pick Up Interaction")
+	float StonePickUpRequestRadius = 175.f;
 
 
 #pragma endregion
@@ -86,5 +101,7 @@ private:
 public:
 	FORCEINLINE UHeroCombatComponent* GetHeroCombatComponent() const { return HeroCombatComponent; }
 
+	UFUNCTION(BlueprintPure, Category = "RPGDemo|Movement")
+	FVector GetNetworkMovementInputDirection() const;
 
 };

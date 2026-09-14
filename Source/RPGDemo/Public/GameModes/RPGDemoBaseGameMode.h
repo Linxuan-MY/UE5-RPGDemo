@@ -7,6 +7,9 @@
 #include "RPGDemoTypes/RPGDemoEnumTypes.h"
 #include "RPGDemoBaseGameMode.generated.h"
 
+class ARPGDemoGameState;
+class ARPGDemoPlayerState;
+
 /**
  *
  */
@@ -17,6 +20,13 @@ class RPGDEMO_API ARPGDemoBaseGameMode : public AGameModeBase
 
 public:
 	ARPGDemoBaseGameMode();
+
+	/**
+	 * A listen server shares its world with every connected player, so pausing that
+	 * world from the host's local pause menu would freeze all clients. Multiplayer
+	 * pause menus are UI/input-only; real world pause remains available in standalone.
+	 */
+	virtual bool SetPause(APlayerController* PC, FCanUnpause CanUnpauseDelegate = FCanUnpause()) override;
 
 protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Settings")

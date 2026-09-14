@@ -6,6 +6,11 @@ public class RPGDemo : ModuleRules
 {
 	public RPGDemo(ReadOnlyTargetRules Target) : base(Target)
 	{
+		if (Target.bBuildEditor)
+		{
+			PrivateDependencyModuleNames.Add("UnrealEd");
+		}
+
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
 		PublicDependencyModuleNames.AddRange(new string[] {
@@ -15,15 +20,21 @@ public class RPGDemo : ModuleRules
 			"InputCore",
 			"EnhancedInput",
 			"GameplayTags",
+			"GameplayAbilities",
 			"GameplayTasks",
 			"AnimGraphRuntime",
 			"MotionWarping",
 			"Niagara",
 			"NavigationSystem",
-			"MoviePlayer"
+			"MoviePlayer",
+			"OnlineSubsystem",
+			"OnlineSubsystemUtils"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] {  });
+		PrivateDependencyModuleNames.AddRange(new string[] {
+			"Slate",
+			"SlateCore"
+		});
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });

@@ -9,6 +9,9 @@
 // Sets default values
 ARPGDemoBaseCharacter::ARPGDemoBaseCharacter()
 {
+	bReplicates = true;
+	SetReplicateMovement(true);
+
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = false;
 	PrimaryActorTick.bStartWithTickEnabled = false;
@@ -16,6 +19,8 @@ ARPGDemoBaseCharacter::ARPGDemoBaseCharacter()
 	GetMesh()->bReceivesDecals = false;
 
 	RPGDemoAbilitySystemComponent = CreateDefaultSubobject<URPGDemoAbilitySystemComponent>(TEXT("RPGDemoAbilitySystemComponent"));
+	RPGDemoAbilitySystemComponent->SetIsReplicated(true);
+	RPGDemoAbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
 
 	RPGDemoAttributeSet = CreateDefaultSubobject<URPGDemoAttributeSet>(TEXT("RPGDemoAttributeSet"));
 
@@ -37,6 +42,20 @@ UPawnUIComponent* ARPGDemoBaseCharacter::GetPawnUIComponent() const
 	return nullptr;
 }
 
+void ARPGDemoBaseCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// Remote player controllers are intentionally not replicated to other clients.
+	// Initialize GAS for every character copy so replicated gameplay cues and
+	// montages can still drive simulated proxies.
+	if (RPGDemoAbilitySystemComponent &&
+		RPGDemoAbilitySystemComponent->GetAvatarActor() != this)
+	{
+		RPGDemoAbilitySystemComponent->InitAbilityActorInfo(this, this);
+	}
+}
+
 void ARPGDemoBaseCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
@@ -46,6 +65,16 @@ void ARPGDemoBaseCharacter::PossessedBy(AController* NewController)
 		RPGDemoAbilitySystemComponent->InitAbilityActorInfo(this, this);
 
 		ensureMsgf(!CharacterStartUpData.IsNull(), TEXT("CharacterStartUpData is null for %s"), *GetName());
+	}
+}
+
+void ARPGDemoBaseCharacter::OnRep_Controller()
+{
+	Super::OnRep_Controller();
+
+	if (RPGDemoAbilitySystemComponent && GetController())
+	{
+		RPGDemoAbilitySystemComponent->InitAbilityActorInfo(this, this);
 	}
 }
 

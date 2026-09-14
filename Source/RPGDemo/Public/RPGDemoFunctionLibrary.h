@@ -81,4 +81,7 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "RPGDemo|FunctionLibrary")
 	static bool TryLoadSavedGameDifficulty(ERPGDemoGameDifficulty& OutGameDifficulty);
+
+	UFUNCTION(BlueprintPure, Category = "RPGDemo|FunctionLibrary")
+	static FText GetGameDifficultyDisplayText(ERPGDemoGameDifficulty GameDifficulty);
 };

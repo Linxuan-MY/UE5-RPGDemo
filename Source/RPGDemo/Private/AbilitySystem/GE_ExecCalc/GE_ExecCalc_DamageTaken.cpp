@@ -93,6 +93,10 @@ void UGE_ExecCalc_DamageTaken::Execute_Implementation(const FGameplayEffectCusto
 	float TargetDefensePower = 0.f;
 	ExecutionParams.AttemptCalculateCapturedAttributeMagnitude(GetRPGDemoDamageCapture().DefensePowerDef, EvaluateParameters, TargetDefensePower);
 	//Debug::Print(TEXT("TargetDefensePower"), TargetDefensePower);
+	// A newly possessed enemy can receive the damage effect before its async
+	// startup data has finished applying. Never let zero defense turn that pawn
+	// into an invulnerable target or produce an infinite/NaN damage value.
+	const float SafeTargetDefensePower = FMath::Max(TargetDefensePower, 1.f);
 
 	if (UsedLightAttackComboCount != 0)
 	{
@@ -108,7 +112,7 @@ void UGE_ExecCalc_DamageTaken::Execute_Implementation(const FGameplayEffectCusto
 		//Debug::Print(TEXT("ScaledBaseDamageHeavy"), BaseDamage);
 	}
 
-	const float FinalDamage = BaseDamage * (SourceAttackPower / TargetDefensePower);
+	const float FinalDamage = BaseDamage * (SourceAttackPower / SafeTargetDefensePower);
 	//Debug::Print(TEXT("FinalDamage"), FinalDamage);
 
 	if (FinalDamage > 0.f)
