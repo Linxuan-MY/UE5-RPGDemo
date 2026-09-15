@@ -3,7 +3,9 @@
 
 #include "Characters/RPGDemoEnemyCharacter.h"
 #include "GameFramework/CharacterMovementComponent.h"
+
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
+#include "AbilitySystem/RPGDemoAttributeSet.h"
 #include "Components/Combat/EnemyCombatComponent.h"
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
@@ -28,6 +30,10 @@
 
 ARPGDemoEnemyCharacter::ARPGDemoEnemyCharacter()
 {
+	RPGDemoAbilitySystemComponent = CreateDefaultSubobject<URPGDemoAbilitySystemComponent>(TEXT("RPGDemoAbilitySystemComponent"));
+	RPGDemoAbilitySystemComponent->SetIsReplicated(true);
+	RPGDemoAbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
+	RPGDemoAttributeSet = CreateDefaultSubobject<URPGDemoAttributeSet>(TEXT("RPGDemoAttributeSet"));
 	bReplicates = true;
 	SetReplicateMovement(true);
 

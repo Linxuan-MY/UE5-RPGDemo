@@ -18,6 +18,7 @@
 
 # Unreal generated project files
 *.sln
+*.slnx
 *.suo
 *.opensdf
 *.sdf
@@ -32,6 +33,7 @@
 .vscode/.browse.VC.db*
 .vscode/ipch/
 .idea/
+.codex/
 /Plugins/Developer/RiderLink/
 *.code-workspace
 *.DotSettings.user
@@ -47,6 +49,8 @@
 *.lastbuildstate
 *.log
 *.tmp
+__pycache__/
+*.py[cod]
 
 # OS files
 .DS_Store
@@ -66,4 +70,6 @@ Desktop.ini
 # Do not commit packaged builds unless intentionally versioning a release
 /Package/
 /Packages/
+/Packaged/
 /Releases/
+/Artifacts/

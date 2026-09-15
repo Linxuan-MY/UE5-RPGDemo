@@ -47,7 +47,7 @@ class UpgradeRegressionTests(unittest.TestCase):
 
     def test_ai_can_switch_between_multiplayer_targets(self):
         source = self.read('Source/RPGDemo/Private/Controllers/RPGDemoAIController.cpp')
-        self.assertIn('Prefer the nearest visible hero', source)
+        self.assertIn('FindNearestPerceivedHostile', source)
         self.assertIn('GetCurrentlyPerceivedActors', source)
 
     def test_listen_server_rejects_global_pause(self):
@@ -77,17 +77,19 @@ class UpgradeRegressionTests(unittest.TestCase):
         self.assertIn('DOREPLIFETIME(ARPGDemoHeroCharacter, ReplicatedMovementInputDirection)', source)
         self.assertIn('GetNetworkMovementInputDirection', source)
 
-    def test_room_creation_reuses_initial_search_and_pie_subsystem(self):
+    def test_multiplayer_uses_direct_dedicated_server_connection(self):
         source = self.read('Source/RPGDemo/Private/RPGDemoGameInstance.cpp')
-        self.assertIn('Online::GetSubsystem(GetWorld())', source)
-        self.assertIn('CreateRoom queued behind the active LAN search', source)
-        self.assertIn('bCreateAfterSearch = true;', source)
-        self.assertIn('Creating LAN room', source)
+        header = self.read('Source/RPGDemo/Public/RPGDemoGameInstance.h')
+        self.assertIn('ConnectToDedicatedServer', header)
+        self.assertIn('ClientTravel(Endpoint, TRAVEL_Absolute)', source)
+        self.assertNotIn('Online::GetSubsystem', source)
+        self.assertNotIn('CreateSession', source)
 
-    def test_lobby_to_survival_travel_flushes_lobby_game_mode_option(self):
-        source = self.read('Source/RPGDemo/Private/RPGDemoGameInstance.cpp')
+    def test_lobby_to_survival_uses_authoritative_server_travel(self):
+        source = self.read('Source/RPGDemo/Private/GameModes/RPGDemoLobbyGameMode.cpp')
         self.assertIn('RPGDemoMultiplayer=1?RPGDemoDifficulty=%s', source)
-        self.assertIn('*RPGDemoSessions::SurvivalMap, *DifficultyOption), true);', source)
+        self.assertIn('GetWorld()->ServerTravel', source)
+        self.assertIn('bIsLobbyHost', source)
 
     def test_survival_controller_restores_input_after_lobby_travel(self):
         header = self.read('Source/RPGDemo/Public/Controllers/RPGDemoHeroController.h')

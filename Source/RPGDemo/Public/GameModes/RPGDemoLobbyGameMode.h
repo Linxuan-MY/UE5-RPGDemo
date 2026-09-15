@@ -9,13 +9,20 @@
 UCLASS()
 class RPGDEMO_API ARPGDemoLobbyGameMode : public ARPGDemoBaseGameMode
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
 public:
-	ARPGDemoLobbyGameMode();
-	virtual void PostLogin(APlayerController* NewPlayer) override;
-	virtual void Logout(AController* Exiting) override;
+    ARPGDemoLobbyGameMode();
+    virtual void BeginPlay() override;
+    virtual void PostLogin(APlayerController* NewPlayer) override;
+    virtual void Logout(AController* Exiting) override;
+    virtual void PreLogin(const FString& Options, const FString& Address,
+        const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
+    void StartGameForHost(APlayerController* RequestingPlayer);
+    void SetDifficultyForHost(APlayerController* RequestingPlayer, ERPGDemoGameDifficulty Difficulty);
 
-	void StartGameForHost(APlayerController* RequestingPlayer);
-	void SetDifficultyForHost(APlayerController* RequestingPlayer, ERPGDemoGameDifficulty Difficulty);
+private:
+    void AssignLobbyHost();
+    uint32 NextJoinOrder = 1;
+    bool bMatchStarting = false;
 };

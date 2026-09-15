@@ -1,52 +1,33 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "DataAssets/StartUpData/DataAsset_StartUpDataBase.h"
-#include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 #include "AbilitySystem/Abilities/RPGDemoGameplayAbility.h"
+#include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 
-void UDataAsset_StartUpDataBase::GiveToAbilitySystemComponent(URPGDemoAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
+void UDataAsset_StartUpDataBase::GiveToAbilitySystemComponent(URPGDemoAbilitySystemComponent* ASC, int32 ApplyLevel)
 {
-	check(InASCToGive);
-	if (!InASCToGive->GetOwner() || !InASCToGive->GetOwner()->HasAuthority())
-	{
-		return;
-	}
-
-	GrantAbilities(ActivateOnGivenAbilities, InASCToGive, ApplyLevel);
-	GrantAbilities(ReactiveAbilities, InASCToGive, ApplyLevel);
-
-	if(!StartUpGameplayEffects.IsEmpty())
-	{
-		for(const TSubclassOf<UGameplayEffect>& EffectClass : StartUpGameplayEffects)
-		{
-			if (!EffectClass) continue;
-
-			UGameplayEffect* EffectCDO = EffectClass->GetDefaultObject<UGameplayEffect>();
-			InASCToGive->ApplyGameplayEffectToSelf(
-				EffectCDO,
-				ApplyLevel,
-				InASCToGive->MakeEffectContext()
-			);
-		}
-	}
+    check(ASC);
+    if (!ASC->GetOwner() || !ASC->GetOwner()->HasAuthority()) return;
+    GrantAbilities(ActivateOnGivenAbilities, ASC, ApplyLevel);
+    GrantAbilities(ReactiveAbilities, ASC, ApplyLevel);
+    for (const TSubclassOf<UGameplayEffect>& EffectClass : StartUpGameplayEffects)
+    {
+        if (EffectClass)
+        {
+            ASC->ApplyGameplayEffectToSelf(EffectClass->GetDefaultObject<UGameplayEffect>(), ApplyLevel, ASC->MakeEffectContext());
+        }
+    }
 }
 
-void UDataAsset_StartUpDataBase::GrantAbilities(const TArray<TSubclassOf<URPGDemoGameplayAbility>>& InAbilitiesToGive, URPGDemoAbilitySystemComponent* InASCToGive, int32 ApplyLevel)
+void UDataAsset_StartUpDataBase::GrantAbilities(
+    const TArray<TSubclassOf<URPGDemoGameplayAbility>>& Abilities, URPGDemoAbilitySystemComponent* ASC, int32 ApplyLevel)
 {
-	if(InAbilitiesToGive.IsEmpty())
-	{
-		return;
-	}
-
-	for(const TSubclassOf<URPGDemoGameplayAbility>& Ability : InAbilitiesToGive)
-	{
-		if (!Ability)continue;
-
-		FGameplayAbilitySpec AbilitySpec(Ability);
-		AbilitySpec.SourceObject = InASCToGive->GetAvatarActor();
-		AbilitySpec.Level = ApplyLevel;
-
-		InASCToGive->GiveAbility(AbilitySpec);
-	}
+    for (const TSubclassOf<URPGDemoGameplayAbility>& Ability : Abilities)
+    {
+        if (!Ability || ASC->FindAbilitySpecFromClass(Ability)) continue;
+        FGameplayAbilitySpec Spec(Ability);
+        Spec.SourceObject = ASC->GetOwnerActor();
+        Spec.Level = ApplyLevel;
+        ASC->GiveAbility(Spec);
+    }
 }

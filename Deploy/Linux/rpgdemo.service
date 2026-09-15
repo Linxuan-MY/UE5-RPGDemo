@@ -1,0 +1,17 @@
+[Unit]
+Description=RPGDemo Unreal Dedicated Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rpgdemo
+Group=rpgdemo
+WorkingDirectory=/opt/rpgdemo/current/LinuxServer
+ExecStart=/opt/rpgdemo/current/LinuxServer/RPGDemoServer.sh MultiplayerLobbyMap?game=/Script/RPGDemo.RPGDemoLobbyGameMode -server -log -port=7777
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

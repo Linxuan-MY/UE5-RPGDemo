@@ -14,6 +14,9 @@ class RPGDEMO_API URPGDemoLobbyWaitingWidget : public URPGDemoWidgetBase
 {
 	GENERATED_BODY()
 
+public:
+	void RefreshLobbyPresentation();
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
@@ -27,6 +30,9 @@ private:
 
 	UFUNCTION()
 	void HandleLobbyDifficultyChanged(ERPGDemoGameDifficulty Difficulty);
+
+	UFUNCTION()
+	void HandleLobbyPlayersChanged();
 
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidget, AllowPrivateAccess = "true"))
 	TObjectPtr<UTextBlock> DifficultyText;

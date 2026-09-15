@@ -15,9 +15,11 @@
 #include "Abilities/GameplayAbility.h"
 #include "Characters/RPGDemoHeroCharacter.h"
 #include "Characters/RPGDemoEnemyCharacter.h"
+#include "GameModes/RPGDemoPlayerState.h"
 #include "Items/RPGDemoProjectileBase.h"
 #include "Items/PickUps/RPGDemoStoneBase.h"
 #include "RPGDemoFunctionLibrary.h"
+#include "RPGDemoGameInstance.h"
 #include "RPGDemoGameplayTags.h"
 #include "UObject/StrongObjectPtr.h"
 #include "UObject/UnrealType.h"
@@ -25,8 +27,8 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "NiagaraComponent.h"
 
-// Own a disposable two-player single-process listen-server PIE session.
-// This deliberately tests real actor channels and the owner's GAS activation RPC.
+// Own a disposable single-process dedicated-server PIE session with two NM_Client worlds.
+// This deliberately tests real dedicated-server actor channels and the owner's GAS activation RPC.
 class FRPGDemoNetworkRegressionCommand : public IAutomationLatentCommand
 {
 public:
@@ -41,6 +43,7 @@ public:
    Defaults->SetPlayNetMode(PreviousNetMode);
    Defaults->SetRunUnderOneProcess(bPreviousOneProcess);
    Defaults->SetPlayNumberOfClients(PreviousClientCount);
+   Defaults->bLaunchSeparateServer = bPreviousLaunchSeparateServer;
    Defaults->SaveConfig();
   }
  }
@@ -52,13 +55,15 @@ public:
    Defaults->GetPlayNetMode(PreviousNetMode);
    Defaults->GetRunUnderOneProcess(bPreviousOneProcess);
    Defaults->GetPlayNumberOfClients(PreviousClientCount);
+   bPreviousLaunchSeparateServer = Defaults->bLaunchSeparateServer;
    Settings.Reset(DuplicateObject<ULevelEditorPlaySettings>(GetDefault<ULevelEditorPlaySettings>(), GetTransientPackage()));
-   Settings->SetPlayNetMode(PIE_ListenServer);
+   Settings->SetPlayNetMode(PIE_Client);
    Settings->SetRunUnderOneProcess(true);
    Settings->SetPlayNumberOfClients(2);
+   Settings->bLaunchSeparateServer = true;
    FRequestPlaySessionParams Params;
    Params.EditorPlaySettings = Settings.Get();
-   Params.GlobalMapOverride = TEXT("/Game/Maps/FeatureDevMap");
+   Params.GlobalMapOverride = TEXT("/Game/Maps/CombatTestMap");
    GEditor->RequestPlaySession(Params);
    bRequestedPIE = true;
    Started = FPlatformTime::Seconds();
@@ -66,7 +71,7 @@ public:
   }
   if (FPlatformTime::Seconds() - Started > 40.0)
   {
-   Test->AddError(FString::Printf(TEXT("Network audit timed out at stage %d. The test-owned two-player PIE session did not reach the expected state."), Stage));
+   Test->AddError(FString::Printf(TEXT("Network audit timed out at stage %d. The test-owned dedicated server and two clients did not reach the expected state."), Stage));
    Test->AddInfo(FString::Printf(TEXT("Fixture refs: projectile=%d stone=%d enemy=%d; impact=%u consume=%d dissolve=%d"),
     ClientProjectile.IsValid(), ClientStone.IsValid(), ClientEnemy.IsValid(),
     ClientProjectile.Get() ? ClientProjectile->LastImpactSequence : 0,
@@ -75,24 +80,34 @@ public:
    return true;
   }
   UWorld* Server = nullptr;
-  UWorld* Client = nullptr;
+  TArray<UWorld*> Clients;
   for (const FWorldContext& Context : GEngine->GetWorldContexts())
   {
    if (Context.WorldType != EWorldType::PIE || !Context.World()) continue;
-   if (Context.World()->GetNetMode() == NM_ListenServer) Server = Context.World();
-   if (Context.World()->GetNetMode() == NM_Client) Client = Context.World();
+   if (Context.World()->GetNetMode() == NM_DedicatedServer) Server = Context.World();
+   if (Context.World()->GetNetMode() == NM_Client) Clients.Add(Context.World());
   }
-  if (!Server || !Client) return false;
+  if (!Server || Clients.Num() != 2) return false;
+  UWorld* Client = Clients[0];
   if (Stage == 0)
   {
+   for (TActorIterator<ARPGDemoHeroCharacter> It(Client); It; ++It)
+    if (It->IsLocallyControlled()) ClientHero = *It;
+   const ARPGDemoPlayerState* ClientState = ClientHero.IsValid()
+    ? ClientHero->GetPlayerState<ARPGDemoPlayerState>() : nullptr;
+   if (!ClientState) return false;
    for (TActorIterator<ARPGDemoHeroCharacter> It(Server); It; ++It)
    {
     if (!It->GetController() || !It->GetController()->IsPlayerController()) continue;
-    if (It->IsLocallyControlled()) Host = *It; else Remote = *It;
+    const ARPGDemoPlayerState* ServerState = It->GetPlayerState<ARPGDemoPlayerState>();
+    if (ServerState && ServerState->GetPlayerId() == ClientState->GetPlayerId()) Remote = *It;
+    else Host = *It;
    }
-   for (TActorIterator<ARPGDemoHeroCharacter> It(Client); It; ++It)
-    if (It->IsLocallyControlled()) ClientHero = *It;
    if (!Host.IsValid() || !Remote.IsValid() || !ClientHero.IsValid()) return false;
+   Test->TestEqual(TEXT("PIE server is dedicated"), Server->GetNetMode(), NM_DedicatedServer);
+   Test->TestEqual(TEXT("PIE client count"), Clients.Num(), 2);
+   Test->TestEqual(TEXT("Hero ASC owner is PlayerState"), Remote->GetRPGDemoAbilitySystemComponent()->GetOwnerActor(), static_cast<AActor*>(Remote->GetPlayerState()));
+   Test->TestEqual(TEXT("Hero ASC avatar is current Pawn"), Remote->GetRPGDemoAbilitySystemComponent()->GetAvatarActor(), static_cast<AActor*>(Remote.Get()));
    auto* ASC = Remote->GetRPGDemoAbilitySystemComponent();
    RageClass = LoadClass<UGameplayAbility>(nullptr, TEXT("/Game/PlayerCharacter/GameplayAbility/GA_Hero_Rage.GA_Hero_Rage_C"));
    if (!Test->TestNotNull(TEXT("Real Rage ability loads"), RageClass)) return true;
@@ -216,12 +231,12 @@ public:
     Test->AddInfo(TEXT("Real Guardian OnEnemyDied completed its async load and advanced the dissolve material timeline without crashing."));
    }
    Test->TestEqual(TEXT("Remote received terminal impact before actor destruction"), ClientProjectile->LastImpactSequence, uint32(1));
-   Test->TestEqual(TEXT("Listen server presented impact once"), Projectile->LastImpactSequence, uint32(1));
+   Test->TestEqual(TEXT("Dedicated server presented impact once"), Projectile->LastImpactSequence, uint32(1));
    Test->TestTrue(TEXT("Server death state started"), Enemy->ReplicatedDeathPresentation.bStarted);
    Test->TestTrue(TEXT("Remote death presentation applied"), ClientEnemy->bLocalDeathPresentationApplied);
    Test->TestTrue(TEXT("Remote received death tag"), ClientEnemy->GetRPGDemoAbilitySystemComponent()->HasMatchingGameplayTag(RPGDemoGameplayTags::Shared_Status_Dead));
    Test->TestTrue(TEXT("Server stone consumed"), Stone->IsConsumed());
-   Test->TestTrue(TEXT("Listen server received consume presentation"), Stone->bLocalConsumptionPresented);
+   Test->TestTrue(TEXT("Dedicated server received consume presentation"), Stone->bLocalConsumptionPresented);
    Test->TestFalse(TEXT("A second consumer cannot apply the effect again"), Stone->Consume(Remote->GetRPGDemoAbilitySystemComponent(), 1));
    Test->AddInfo(bBlueprintEnemy ? TEXT("Blueprint enemy death regression passed.") : TEXT("Network contract regression passed. Native death fixture verifies dispatch, not montage/material rendering."));
    return true;
@@ -236,6 +251,7 @@ private:
  bool bRequestedPIE = false;
  EPlayNetMode PreviousNetMode = PIE_Standalone;
  bool bPreviousOneProcess = true;
+ bool bPreviousLaunchSeparateServer = false;
  int32 PreviousClientCount = 1;
  TStrongObjectPtr<ULevelEditorPlaySettings> Settings;
  UClass* RageClass = nullptr;
@@ -245,7 +261,20 @@ private:
  TStrongObjectPtr<ARPGDemoEnemyCharacter> Enemy, ClientEnemy;
 };
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRPGDemoNetworkContractsTest, "RPGDemo.Network.ListenServerContracts", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRPGDemoEndpointValidationTest, "RPGDemo.Network.EndpointValidation", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FRPGDemoEndpointValidationTest::RunTest(const FString& Parameters)
+{
+ TestTrue(TEXT("IPv4 endpoint"), URPGDemoGameInstance::IsValidDedicatedServerEndpoint(TEXT("127.0.0.1:7777")));
+ TestTrue(TEXT("DNS endpoint"), URPGDemoGameInstance::IsValidDedicatedServerEndpoint(TEXT("demo.example.com:7777")));
+ TestFalse(TEXT("Missing port"), URPGDemoGameInstance::IsValidDedicatedServerEndpoint(TEXT("demo.example.com")));
+ TestFalse(TEXT("Empty host"), URPGDemoGameInstance::IsValidDedicatedServerEndpoint(TEXT(":7777")));
+ TestFalse(TEXT("Non-numeric port"), URPGDemoGameInstance::IsValidDedicatedServerEndpoint(TEXT("localhost:game")));
+ TestFalse(TEXT("Zero port"), URPGDemoGameInstance::IsValidDedicatedServerEndpoint(TEXT("localhost:0")));
+ TestFalse(TEXT("Out-of-range port"), URPGDemoGameInstance::IsValidDedicatedServerEndpoint(TEXT("localhost:65536")));
+ TestFalse(TEXT("Whitespace in host"), URPGDemoGameInstance::IsValidDedicatedServerEndpoint(TEXT("bad host:7777")));
+ return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRPGDemoNetworkContractsTest, "RPGDemo.Network.DedicatedServerContracts", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FRPGDemoNetworkContractsTest::RunTest(const FString& Parameters)
 {
  ADD_LATENT_AUTOMATION_COMMAND(FRPGDemoNetworkRegressionCommand(this));

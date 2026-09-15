@@ -4,6 +4,7 @@
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 #include "GameModes/RPGDemoGameState.h"
+#include "GameModes/RPGDemoPlayerState.h"
 #include "RPGDemoFunctionLibrary.h"
 #include "RPGDemoGameInstance.h"
 
@@ -16,26 +17,17 @@ void URPGDemoLobbyWaitingWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	const URPGDemoGameInstance* GameInstance = GetGameInstance<URPGDemoGameInstance>();
-	const bool bIsHost = GameInstance && GameInstance->IsRoomHost();
-	if (OptionsButton)
+	if (UButton* Button = ResolveInnerButton(OptionsButton))
 	{
-		OptionsButton->SetVisibility(bIsHost ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
-	}
-
-	if (bIsHost)
-	{
-		if (UButton* Button = ResolveInnerButton(OptionsButton))
-		{
-			Button->OnClicked.AddUniqueDynamic(this, &ThisClass::HandleOptionsClicked);
-		}
+		Button->OnClicked.AddUniqueDynamic(this, &ThisClass::HandleOptionsClicked);
 	}
 
 	if (ARPGDemoGameState* State = GetWorld() ? GetWorld()->GetGameState<ARPGDemoGameState>() : nullptr)
 	{
 		State->OnLobbyDifficultyChanged.AddUniqueDynamic(this, &ThisClass::HandleLobbyDifficultyChanged);
+		State->OnLobbyPlayersChanged.AddUniqueDynamic(this, &ThisClass::HandleLobbyPlayersChanged);
 	}
-	RefreshLobbyDifficulty();
+	RefreshLobbyPresentation();
 }
 
 void URPGDemoLobbyWaitingWidget::NativeDestruct()
@@ -43,10 +35,23 @@ void URPGDemoLobbyWaitingWidget::NativeDestruct()
 	if (ARPGDemoGameState* State = GetWorld() ? GetWorld()->GetGameState<ARPGDemoGameState>() : nullptr)
 	{
 		State->OnLobbyDifficultyChanged.RemoveDynamic(this, &ThisClass::HandleLobbyDifficultyChanged);
+		State->OnLobbyPlayersChanged.RemoveDynamic(this, &ThisClass::HandleLobbyPlayersChanged);
 	}
 	Super::NativeDestruct();
 }
 
+void URPGDemoLobbyWaitingWidget::RefreshLobbyPresentation()
+{
+	const APlayerController* OwningController = GetOwningPlayer();
+	const ARPGDemoPlayerState* PlayerState = OwningController ? OwningController->GetPlayerState<ARPGDemoPlayerState>() : nullptr;
+	if (OptionsButton)
+	{
+		OptionsButton->SetVisibility(PlayerState && PlayerState->bIsLobbyHost
+			? ESlateVisibility::SelfHitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+	RefreshLobbyDifficulty();
+}
 void URPGDemoLobbyWaitingWidget::RefreshLobbyDifficulty()
 {
 	const ARPGDemoGameState* State = GetWorld() ? GetWorld()->GetGameState<ARPGDemoGameState>() : nullptr;
@@ -60,8 +65,9 @@ void URPGDemoLobbyWaitingWidget::RefreshLobbyDifficulty()
 
 void URPGDemoLobbyWaitingWidget::HandleOptionsClicked()
 {
-	const URPGDemoGameInstance* GameInstance = GetGameInstance<URPGDemoGameInstance>();
-	if (!GameInstance || !GameInstance->IsRoomHost() || !GetOwningPlayer())
+	const APlayerController* OwningController = GetOwningPlayer();
+	const ARPGDemoPlayerState* PlayerState = OwningController ? OwningController->GetPlayerState<ARPGDemoPlayerState>() : nullptr;
+	if (!PlayerState || !PlayerState->bIsLobbyHost || !GetOwningPlayer())
 	{
 		return;
 	}
@@ -79,5 +85,10 @@ void URPGDemoLobbyWaitingWidget::HandleOptionsClicked()
 
 void URPGDemoLobbyWaitingWidget::HandleLobbyDifficultyChanged(ERPGDemoGameDifficulty Difficulty)
 {
-	RefreshLobbyDifficulty();
+	RefreshLobbyPresentation();
+}
+
+void URPGDemoLobbyWaitingWidget::HandleLobbyPlayersChanged()
+{
+	RefreshLobbyPresentation();
 }
