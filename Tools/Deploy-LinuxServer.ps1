@@ -10,6 +10,20 @@ $ErrorActionPreference = 'Stop'
 $archivePath = (Resolve-Path -LiteralPath $Archive).Path
 $hashPath = "$archivePath.sha256"
 if (-not (Test-Path -LiteralPath $hashPath)) { throw "Missing checksum file: $hashPath" }
+
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zip = [System.IO.Compression.ZipFile]::OpenRead($archivePath)
+try {
+    $entryNames = @($zip.Entries | ForEach-Object FullName)
+    foreach ($requiredEntry in @('RPGDemoServer.sh', 'RPGDemo/Binaries/Linux/RPGDemoServer')) {
+        if ($entryNames -notcontains $requiredEntry) {
+            throw "Archive is missing required entry: $requiredEntry"
+        }
+    }
+}
+finally {
+    $zip.Dispose()
+}
 $buildId = [IO.Path]::GetFileNameWithoutExtension($archivePath)
 $remoteUpload = "/tmp/$([IO.Path]::GetFileName($archivePath))"
 $remoteHash = "$remoteUpload.sha256"

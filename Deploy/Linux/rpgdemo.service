@@ -7,8 +7,8 @@ Wants=network-online.target
 Type=simple
 User=rpgdemo
 Group=rpgdemo
-WorkingDirectory=/opt/rpgdemo/current/LinuxServer
-ExecStart=/opt/rpgdemo/current/LinuxServer/RPGDemoServer.sh MultiplayerLobbyMap?game=/Script/RPGDemo.RPGDemoLobbyGameMode -server -log -port=7777
+WorkingDirectory=/opt/rpgdemo/current
+ExecStart=/opt/rpgdemo/current/RPGDemoServer.sh MultiplayerLobbyMap?game=/Script/RPGDemo.RPGDemoLobbyGameMode -server -log -port=7777
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=1048576
