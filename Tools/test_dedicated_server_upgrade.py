@@ -14,6 +14,10 @@ class DedicatedServerUpgradeTests(unittest.TestCase):
         self.assertIn("TargetType.Server", target)
         self.assertIn('ExtraModuleNames.Add("RPGDemo")', target)
         self.assertIn("EngineIncludeOrderVersion.Unreal5_8", target)
+        self.assertIn("BuildSettingsVersion.V7", target)
+        self.assertIn('"OnlineSubsystemNull"', target)
+        self.assertIn('"ModelContextProtocol"', target)
+        self.assertIn('"AllToolsets"', target)
 
     def test_network_settings_define_safe_local_default(self):
         header = self.read("Source/RPGDemo/Public/Settings/RPGDemoNetworkSettings.h")
@@ -89,6 +93,10 @@ class DedicatedServerUpgradeTests(unittest.TestCase):
         self.assertIn("BuildCookRun", build)
         self.assertIn("Linux", build)
         self.assertIn("Get-FileHash", build)
+        self.assertIn('"-project=$projectFile"', build)
+        self.assertIn('"-serverconfig=$Configuration"', build)
+        self.assertIn('"-archivedirectory=$archiveDirectory"', build)
+        self.assertIn('"-UbtArgs=-MaxParallelActions=$MaxParallelActions"', build)
         self.assertIn("/opt/rpgdemo/releases", deploy)
         self.assertIn("sha256sum", deploy)
         self.assertIn("rollback", deploy.lower())

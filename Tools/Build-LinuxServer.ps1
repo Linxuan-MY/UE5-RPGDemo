@@ -21,14 +21,14 @@ $archiveDirectory = Join-Path $ArchiveRoot $buildId
 New-Item -ItemType Directory -Force -Path $archiveDirectory | Out-Null
 
 & $runUat BuildCookRun `
-    -project=$projectFile `
+    "-project=$projectFile" `
     -noP4 -utf8output -build -cook -stage -pak -archive `
     -server -noclient -serverplatform=Linux `
-    -serverconfig=$Configuration `
+    "-serverconfig=$Configuration" `
     -target=RPGDemoServer `
     "-UbtArgs=-MaxParallelActions=$MaxParallelActions" `
     -map=/Game/Maps/MultiplayerLobbyMap+/Game/Maps/MainMenuMap+/Game/Maps/SurvivalGameModeMap `
-    -archivedirectory=$archiveDirectory
+    "-archivedirectory=$archiveDirectory"
 if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed with exit code $LASTEXITCODE" }
 
 $archiveFile = Join-Path $ArchiveRoot "$buildId.zip"
