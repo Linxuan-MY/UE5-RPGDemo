@@ -8,7 +8,7 @@ Type=simple
 User=rpgdemo
 Group=rpgdemo
 WorkingDirectory=/opt/rpgdemo/current
-ExecStart=/opt/rpgdemo/current/RPGDemoServer.sh MultiplayerLobbyMap?game=/Script/RPGDemo.RPGDemoLobbyGameMode -server -log -port=7777
+ExecStart=/bin/sh /opt/rpgdemo/current/RPGDemoServer.sh MultiplayerLobbyMap?game=/Script/RPGDemo.RPGDemoLobbyGameMode -server -log -port=7777
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=1048576

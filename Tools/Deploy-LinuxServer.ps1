@@ -50,6 +50,9 @@ sudo install -d -o rpgdemo -g rpgdemo "$install_root/releases"
 sudo rm -rf -- "$release.tmp"
 sudo install -d -o rpgdemo -g rpgdemo "$release.tmp"
 sudo -u rpgdemo unzip -q "$upload" -d "$release.tmp"
+sudo -u rpgdemo chmod +x \
+    "$release.tmp/RPGDemoServer.sh" \
+    "$release.tmp/RPGDemo/Binaries/Linux/RPGDemoServer"
 sudo mv -- "$release.tmp" "$release"
 sudo ln -sfn -- "$release" "$install_root/current"
 deployment_ok=false

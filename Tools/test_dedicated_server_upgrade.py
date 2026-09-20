@@ -102,9 +102,10 @@ class DedicatedServerUpgradeTests(unittest.TestCase):
         self.assertIn("rollback", deploy.lower())
         self.assertIn("Restart=on-failure", service)
         self.assertIn("WorkingDirectory=/opt/rpgdemo/current", service)
-        self.assertIn("ExecStart=/opt/rpgdemo/current/RPGDemoServer.sh", service)
+        self.assertIn("ExecStart=/bin/sh /opt/rpgdemo/current/RPGDemoServer.sh", service)
         self.assertNotIn("/opt/rpgdemo/current/LinuxServer", service)
         self.assertIn("Archive is missing required entry:", deploy)
+        self.assertIn('sudo -u rpgdemo chmod +x', deploy)
         self.assertIn("7777", service)
 
 
