@@ -3,6 +3,8 @@ param(
     [string]$EngineRoot = 'E:\UE Source\UnrealEngine-5.8',
     [ValidateSet('Development', 'Shipping')]
     [string]$Configuration = 'Development',
+    [ValidateRange(1, 32)]
+    [int]$MaxParallelActions = 8,
     [string]$ArchiveRoot = (Join-Path $PSScriptRoot '..\Artifacts\LinuxServer')
 )
 
@@ -24,6 +26,7 @@ New-Item -ItemType Directory -Force -Path $archiveDirectory | Out-Null
     -server -noclient -serverplatform=Linux `
     -serverconfig=$Configuration `
     -target=RPGDemoServer `
+    "-UbtArgs=-MaxParallelActions=$MaxParallelActions" `
     -map=/Game/Maps/MultiplayerLobbyMap+/Game/Maps/MainMenuMap+/Game/Maps/SurvivalGameModeMap `
     -archivedirectory=$archiveDirectory
 if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed with exit code $LASTEXITCODE" }
