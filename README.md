@@ -54,8 +54,9 @@ Windows Shipping 包：[GitHub Release v1.0.0](https://github.com/Linxuan-MY/UE5
 
 ## 源码环境
 
-- Unreal Engine 5.4
+- Unreal Engine 5.8 源码版；默认路径为 `E:\UE Source\UnrealEngine-5.8`
 - Visual Studio 或 Rider；Visual Studio 组件配置见 `.vsconfig`
+- .NET 10 SDK；项目 `global.json` 优先选择源码引擎自带的 `10.0.203` SDK
 - Git LFS，用于 `.uasset`、`.umap` 等二进制资产
 
 首次拉取后执行：
@@ -65,7 +66,17 @@ git lfs install
 git lfs pull
 ```
 
-打开 `RPGDemo.uproject`，按需重新生成项目文件并编译 `RPGDemoEditor`。项目默认使用 Desktop、DX12 和 SM6 配置。
+先在源码引擎中运行 `Setup.bat`，再关联引擎并生成项目文件：
+
+```powershell
+pwsh -File .\Tools\Configure-SourceEngine.ps1 -EngineRoot 'E:\UE Source\UnrealEngine-5.8'
+```
+
+脚本会同步更新 `EngineAssociation` 和 `global.json` 中的内置 SDK 路径与版本。添加 `-BuildEditor` 可编译 `RPGDemoEditor`。
+
+`global.json` 的 `sdk.paths` 需要 .NET 10 或更高版本的 `dotnet` 主机；只有 .NET 10 运行时并不代表系统已安装 SDK。Rider 如仍选择旧 SDK，可在 **Settings → Build, Execution, Deployment → Toolset and Build** 中将 .NET CLI 指向引擎的 `Engine\Binaries\ThirdParty\DotNet\10.0\win-x64\dotnet.exe`，MSBuild 使用该 SDK 的 `sdk\10.0.203\MSBuild.dll` 或支持 .NET 10 的 Rider 内置版本，然后重新加载项目。
+
+打开 `RPGDemo.uproject`。项目默认使用 Desktop、DX12 和 SM6 配置。
 
 ## 资产说明
 

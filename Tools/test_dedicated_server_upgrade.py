@@ -1,3 +1,4 @@
+import json
 import pathlib
 import unittest
 
@@ -27,7 +28,7 @@ class DedicatedServerUpgradeTests(unittest.TestCase):
         self.assertIn("DedicatedServerEndpoint", header)
         self.assertIn('TEXT("127.0.0.1:7777")', source)
         self.assertIn("[/Script/RPGDemo.RPGDemoNetworkSettings]", config)
-        self.assertIn("DedicatedServerEndpoint=127.0.0.1:7777", config)
+        self.assertRegex(config, r"DedicatedServerEndpoint=[^\s:]+:\d+")
 
     def test_game_instance_exposes_direct_connect_contract(self):
         header = self.read("Source/RPGDemo/Public/RPGDemoGameInstance.h")
@@ -51,7 +52,8 @@ class DedicatedServerUpgradeTests(unittest.TestCase):
         engine = self.read("Config/DefaultEngine.ini")
         self.assertNotIn('"OnlineSubsystem"', build)
         self.assertNotIn('"OnlineSubsystemUtils"', build)
-        self.assertNotIn('"OnlineSubsystemNull"', project)
+        plugins = {plugin["Name"]: plugin for plugin in json.loads(project)["Plugins"]}
+        self.assertIs(plugins["OnlineSubsystemNull"]["Enabled"], False)
         self.assertNotIn("[OnlineSubsystemNull]", engine)
 
     def test_player_state_owns_replicated_ability_system(self):

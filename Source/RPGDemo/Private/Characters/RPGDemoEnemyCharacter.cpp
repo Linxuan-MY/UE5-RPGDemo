@@ -2,6 +2,8 @@
 
 
 #include "Characters/RPGDemoEnemyCharacter.h"
+#include "AIController.h"
+#include "BrainComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
@@ -205,10 +207,22 @@ void ARPGDemoEnemyCharacter::ApplyReplicatedDeathPresentation()
 
 	bLocalDeathPresentationApplied = true;
 
+	if (AAIController* AIController = Cast<AAIController>(GetController()))
+	{
+		AIController->StopMovement();
+		if (UBrainComponent* Brain = AIController->GetBrainComponent())
+		{
+			Brain->StopLogic(TEXT("Enemy death"));
+		}
+	}
+
 	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
 	{
 		Movement->StopMovementImmediately();
-		Movement->DisableMovement();
+		Movement->StopActiveMovement();
+		// MOVE_None also discards montage root motion. With collision disabled, use
+		// Flying to apply the death's full root transform without gravity or AI input.
+		Movement->SetMovementMode(MOVE_Flying);
 	}
 
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -252,6 +266,12 @@ void ARPGDemoEnemyCharacter::BeginReplicatedDissolvePresentation()
 	}
 
 	bLocalDissolvePresentationApplied = true;
+
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->StopMovementImmediately();
+		Movement->DisableMovement();
+	}
 
 	// The authority already executes the existing ability OnEnd path. Simulated proxies
 	// need this explicit bridge because they do not own the AI's ability spec.

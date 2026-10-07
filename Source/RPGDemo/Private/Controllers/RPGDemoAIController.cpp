@@ -18,12 +18,14 @@ ARPGDemoAIController::ARPGDemoAIController(const FObjectInitializer& ObjectIniti
 	AISenseConfig_Sight->DetectionByAffiliation.bDetectFriendlies = false;
 	AISenseConfig_Sight->DetectionByAffiliation.bDetectNeutrals = false;
 	AISenseConfig_Sight->SightRadius = 5000.f;
-	AISenseConfig_Sight->LoseSightRadius = 0.f;
+	// Sight uses this radius after acquisition. A zero radius loses the target
+	// on the next perception update and repeatedly restarts the chase task.
+	AISenseConfig_Sight->LoseSightRadius = 5500.f;
 	AISenseConfig_Sight->PeripheralVisionAngleDegrees = 360.f;
 
 	EnemyPerceptionComponent = CreateDefaultSubobject<UAIPerceptionComponent>("EnemyPerceptionComponent");
 	EnemyPerceptionComponent->ConfigureSense(*AISenseConfig_Sight);
-	EnemyPerceptionComponent->SetDominantSense(UAISenseConfig_Sight::StaticClass());
+	EnemyPerceptionComponent->SetDominantSense(UAISense_Sight::StaticClass());
 	EnemyPerceptionComponent->OnTargetPerceptionUpdated.AddUniqueDynamic(this, &ThisClass::OnEnemyPerceptionUpdated);
 
 	SetGenericTeamId(FGenericTeamId(1));

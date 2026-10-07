@@ -26,6 +26,13 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "NiagaraComponent.h"
+#include "Animation/AnimMontage.h"
+#include "Animation/WidgetAnimation.h"
+#include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetBlueprintGeneratedClass.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
+#include "Components/TextBlock.h"
+#include "Controllers/RPGDemoHeroController.h"
 
 // Own a disposable single-process dedicated-server PIE session with two NM_Client worlds.
 // This deliberately tests real dedicated-server actor channels and the owner's GAS activation RPC.
@@ -194,6 +201,37 @@ public:
     if (It->GetClass() == Enemy->GetClass() && FVector::DistSquared(It->GetActorLocation(), Enemy->GetActorLocation()) < FMath::Square(100.f)) ClientEnemy.Reset(*It);
    if (!ClientProjectile.IsValid() || !ClientStone.IsValid() || !ClientEnemy.IsValid()) return false;
    if (bBlueprintEnemy && !Enemy->bEnemyStartUpDataInitialized) return false;
+   if (bBlueprintEnemy)
+   {
+    if (!bCountdownShown)
+    {
+     ARPGDemoHeroController* Controller = Cast<ARPGDemoHeroController>(ClientHero->GetController());
+     UClass* WidgetClass = LoadClass<UUserWidget>(nullptr,
+      TEXT("/Game/Widgets/GameModeWidgets/WBP_WaveTextWithCountDown.WBP_WaveTextWithCountDown_C"));
+     if (!Test->TestNotNull(TEXT("Local presentation controller"), Controller) ||
+      !Test->TestNotNull(TEXT("Real countdown widget class"), WidgetClass)) return true;
+     Controller->ShowCountdownMessage(FText::FromString(TEXT("Countdown regression")), 0.75f);
+     TArray<UUserWidget*> Widgets;
+     UWidgetBlueprintLibrary::GetAllWidgetsOfClass(Client, Widgets, WidgetClass, true);
+     if (!Test->TestEqual(TEXT("One countdown added to client viewport"), Widgets.Num(), 1)) return true;
+     CountdownWidget = Widgets[0];
+     CountdownStarted = Client->GetTimeSeconds();
+     bCountdownShown = true;
+     return false;
+    }
+    if (Client->GetTimeSeconds() - CountdownStarted < 0.2) return false;
+    if (!Test->TestNotNull(TEXT("Countdown survives until the first animation sample"), CountdownWidget.Get())) return true;
+    UTextBlock* Text = Cast<UTextBlock>(CountdownWidget->GetWidgetFromName(TEXT("TextBlock_CountDownText")));
+    Test->TestTrue(TEXT("Real countdown event updates the visible number"), Text && Text->GetText().ToString() == TEXT("1"));
+    const UWidgetBlueprintGeneratedClass* WidgetClass = Cast<UWidgetBlueprintGeneratedClass>(CountdownWidget->GetClass());
+    bool bAnimationAdvanced = false;
+    if (WidgetClass)
+     for (UWidgetAnimation* Animation : WidgetClass->Animations)
+      bAnimationAdvanced |= CountdownWidget->IsAnimationPlaying(Animation) && CountdownWidget->GetAnimationCurrentTime(Animation) > 0.f;
+    Test->TestTrue(TEXT("Wave entry animation plays and advances in the client viewport"), bAnimationAdvanced);
+    DeathStartLocation = Enemy->GetActorLocation();
+    ClientDeathStartLocation = ClientEnemy->GetActorLocation();
+   }
    // Same-frame collision callbacks must emit one terminal impact, before replicated destruction.
    FHitResult Hit;
    Hit.ImpactPoint = Projectile->GetActorLocation();
@@ -212,6 +250,11 @@ public:
   }
   if (Stage == 4)
   {
+   if (bBlueprintEnemy)
+   {
+    ServerDeathDistance = FMath::Max(ServerDeathDistance, FVector::Distance(Enemy->GetActorLocation(), DeathStartLocation));
+    ClientDeathDistance = FMath::Max(ClientDeathDistance, FVector::Distance(ClientEnemy->GetActorLocation(), ClientDeathStartLocation));
+   }
    if (ClientProjectile->LastImpactSequence != 1 || !ClientStone->bLocalConsumptionPresented ||
     !ClientEnemy->bLocalDissolvePresentationApplied) return false;
    if (bBlueprintEnemy)
@@ -226,6 +269,11 @@ public:
     if (!Material || !bNiagaraSpawned || !ClientEnemy->GetMesh()->bPauseAnims ||
      Material->K2_GetScalarParameterValue(TEXT("DissolveAmount")) <= 0.05f) return false;
     Test->TestNotNull(TEXT("Real server death montage replicated"), ClientEnemy->ReplicatedDeathPresentation.DeathMontage.Get());
+    Test->TestTrue(TEXT("Death montage contains root motion"), Enemy->ReplicatedDeathPresentation.DeathMontage && Enemy->ReplicatedDeathPresentation.DeathMontage->HasRootMotion());
+    Test->TestTrue(TEXT("Dedicated server applies death root motion"), ServerDeathDistance > 5.f);
+    Test->TestTrue(TEXT("Remote client applies death root motion"), ClientDeathDistance > 5.f);
+    Test->TestTrue(TEXT("Countdown widget removes itself when the supplied duration completes"), !CountdownWidget.IsValid() || !CountdownWidget->IsInViewport());
+    Test->AddInfo(FString::Printf(TEXT("Death root motion displacement: server=%.2f cm, client=%.2f cm"), ServerDeathDistance, ClientDeathDistance));
     Test->TestNotNull(TEXT("Cold dissolve soft asset resolved on server"), Enemy->ReplicatedDeathPresentation.DissolveSystem.Get());
     Test->TestTrue(TEXT("Remote real Blueprint spawned dissolve Niagara"), bNiagaraSpawned);
     Test->AddInfo(TEXT("Real Guardian OnEnemyDied completed its async load and advanced the dissolve material timeline without crashing."));
@@ -259,6 +307,11 @@ private:
  TStrongObjectPtr<ARPGDemoProjectileBase> Projectile, ClientProjectile;
  TStrongObjectPtr<ARPGDemoStoneBase> Stone, ClientStone;
  TStrongObjectPtr<ARPGDemoEnemyCharacter> Enemy, ClientEnemy;
+ TWeakObjectPtr<UUserWidget> CountdownWidget;
+ bool bCountdownShown = false;
+ double CountdownStarted = 0.0;
+ FVector DeathStartLocation = FVector::ZeroVector, ClientDeathStartLocation = FVector::ZeroVector;
+ double ServerDeathDistance = 0.0, ClientDeathDistance = 0.0;
 };
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRPGDemoEndpointValidationTest, "RPGDemo.Network.EndpointValidation", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

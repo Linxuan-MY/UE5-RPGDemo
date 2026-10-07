@@ -145,9 +145,13 @@ void ARPGDemoHeroController::ShowCountdownMessage(const FText& Message, float Du
     if (UFunction* Function = Widget->FindFunction(TEXT("StartCountDown")))
     {
         FStructOnScope Parameters(Function);
-        if (FFloatProperty* DurationProperty = FindFProperty<FFloatProperty>(Function, TEXT("InTotalCountDownTime")))
+        FNumericProperty* DurationProperty = FindFProperty<FNumericProperty>(Function, TEXT("InTotalCountDownTime"));
+        if (DurationProperty && DurationProperty->IsFloatingPoint())
         {
-            DurationProperty->SetPropertyValue_InContainer(Parameters.GetStructMemory(), FMath::Max(0.f, DurationSeconds));
+            // Blueprint real pins may be double precision. Write the reflected type's storage.
+            DurationProperty->SetFloatingPointPropertyValue(
+                DurationProperty->ContainerPtrToValuePtr<void>(Parameters.GetStructMemory()),
+                FMath::Max(0.f, DurationSeconds));
             Widget->ProcessEvent(Function, Parameters.GetStructMemory());
         }
     }
