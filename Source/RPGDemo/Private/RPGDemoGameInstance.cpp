@@ -149,6 +149,23 @@ void URPGDemoGameInstance::DisconnectToMainMenu()
     UGameplayStatics::OpenLevel(this, FName(*RPGDemoNetwork::MainMenuMap));
 }
 
+void URPGDemoGameInstance::ReturnToMainMenu()
+{
+    DisconnectToMainMenu();
+}
+
+bool URPGDemoGameInstance::IsRoomHost() const
+{
+    const APlayerController* Controller = GetFirstLocalPlayerController();
+    const ARPGDemoPlayerState* State = Controller ? Controller->GetPlayerState<ARPGDemoPlayerState>() : nullptr;
+    return State && State->bIsLobbyHost;
+}
+
+FString URPGDemoGameInstance::GetCurrentRoomCode() const
+{
+    return GetResolvedDedicatedServerEndpoint();
+}
+
 void URPGDemoGameInstance::HandleNetworkFailure(
     UWorld*, UNetDriver*, ENetworkFailure::Type, const FString& ErrorString)
 {

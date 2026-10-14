@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $projectRoot 'RPGDemo.uproject'
 $pythonScriptPath = Join-Path $PSScriptRoot 'verify_cooldown_widget_isolation.py'
-$editorPath = 'E:\UE engine\UE_5.4\Engine\Binaries\Win64\UnrealEditor-Cmd.exe'
+$editorPath = 'E:\UE Source\UnrealEngine-5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe'
 $logDirectory = Join-Path $projectRoot 'Saved\Logs'
 $logPath = Join-Path $logDirectory 'CooldownWidgetIsolationTest.log'
 

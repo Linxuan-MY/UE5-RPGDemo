@@ -9,6 +9,21 @@
 #include "RPGDemoGameplayTags.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
+#include "Combat/RPGDemoCombatLog.h"
+#include "Characters/RPGDemoEnemyCharacter.h"
+
+void URPGDemoGameplayAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+    const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
+{
+    // Damage, an owned death tag and direct scripted activation share the same
+    // presentation. Queue resolution before Blueprint chooses its montage.
+    if (ActorInfo && ActorInfo->IsNetAuthority() && GetAssetTags().HasTagExact(RPGDemoGameplayTags::Shared_Ability_Death))
+    {
+        if (auto* Enemy = Cast<ARPGDemoEnemyCharacter>(ActorInfo->AvatarActor.Get())) Enemy->BeginReplicatedDeathPresentation();
+        else if (auto* Character = Cast<ARPGDemoBaseCharacter>(ActorInfo->AvatarActor.Get())) Character->BeginCharacterDeath();
+    }
+    Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+}
 
 void URPGDemoGameplayAbility::OnGiveAbility(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec)
 {
@@ -51,6 +66,8 @@ void URPGDemoGameplayAbility::OnGiveAbility(const FGameplayAbilityActorInfo* Act
 						if (FGameplayAbilitySpec* CurrentSpec = ASC->FindAbilitySpecFromHandle(SpecHandle);
 							CurrentSpec && !CurrentSpec->IsActive())
 						{
+                            AActor* SourceActor = Cast<AActor>(CurrentSpec->SourceObject.Get());
+                            if (SourceActor && SourceActor->IsA<APawn>() && SourceActor != ASC->GetAvatarActor()) return;
 							ASC->TryActivateAbility(SpecHandle);
 						}
 					}
@@ -61,6 +78,16 @@ void URPGDemoGameplayAbility::OnGiveAbility(const FGameplayAbilityActorInfo* Act
 
 void URPGDemoGameplayAbility::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
 {
+
+    SetHitReactFlashEnabled(false);
+    const FGameplayTagContainer& Tags = GetAssetTags();
+    if (ActorInfo && ActorInfo->IsNetAuthority() &&
+        (Tags.HasTag(RPGDemoGameplayTags::Enemy_Ability_Melee) ||
+         Tags.HasTag(RPGDemoGameplayTags::Player_Ability_LightAttack_Axe) ||
+         Tags.HasTag(RPGDemoGameplayTags::Player_Ability_HeavyAttack_Axe)))
+    {
+        if (UPawnCombatComponent* Combat = GetPawnCombatComponentFromActorInfo()) Combat->ResetDamageCollision();
+    }
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 
 	if (AbilityActivationPolicy == ERPGDemoAbilityActivationPolicy::OnGiven)
@@ -72,9 +99,28 @@ void URPGDemoGameplayAbility::EndAbility(const FGameplayAbilitySpecHandle Handle
 	}
 }
 
+void URPGDemoGameplayAbility::SetHitReactFlashEnabled(bool bEnabled)
+{
+    if (!CurrentActorInfo || !CurrentActorInfo->IsNetAuthority() || !CurrentActorInfo->AbilitySystemComponent.IsValid()) return;
+    UAbilitySystemComponent* ASC = CurrentActorInfo->AbilitySystemComponent.Get();
+    if (bEnabled && !bHitReactFlashActive)
+    {
+        bHitReactFlashActive = true;
+        FGameplayCueParameters Parameters;
+        Parameters.EffectContext = ASC->MakeEffectContext();
+        ASC->AddGameplayCue(RPGDemoGameplayTags::GameplayCue_FX_HitFlash, Parameters);
+    }
+    else if (!bEnabled && bHitReactFlashActive)
+    {
+        bHitReactFlashActive = false;
+        ASC->RemoveGameplayCue(RPGDemoGameplayTags::GameplayCue_FX_HitFlash);
+    }
+}
+
 UPawnCombatComponent* URPGDemoGameplayAbility::GetPawnCombatComponentFromActorInfo() const
 {
-	return GetAvatarActorFromActorInfo()->FindComponentByClass<UPawnCombatComponent>();
+    AActor* Avatar = GetAvatarActorFromActorInfo();
+    return Avatar ? Avatar->FindComponentByClass<UPawnCombatComponent>() : nullptr;
 }
 
 URPGDemoAbilitySystemComponent* URPGDemoGameplayAbility::GetRPGDemoAbilitySystemComponentFromActorInfo() const
@@ -86,7 +132,8 @@ FActiveGameplayEffectHandle URPGDemoGameplayAbility::NativeApplyEffectSpecToTarg
 {
 	UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(TargetActor);
 
-	check(TargetASC && InSpecHandle.IsValid());
+    if (!CurrentActorInfo || !CurrentActorInfo->IsNetAuthority() || !IsValid(TargetASC) || !InSpecHandle.IsValid())
+        return FActiveGameplayEffectHandle();
 
 	return GetRPGDemoAbilitySystemComponentFromActorInfo()->ApplyGameplayEffectSpecToTarget(
 		*InSpecHandle.Data,

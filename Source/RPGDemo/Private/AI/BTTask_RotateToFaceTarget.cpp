@@ -44,6 +44,7 @@ FString UBTTask_RotateToFaceTarget::GetStaticDescription() const
 
 EBTNodeResult::Type UBTTask_RotateToFaceTarget::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
+    if (!OwnerComp.GetBlackboardComponent() || !OwnerComp.GetAIOwner()) return EBTNodeResult::Failed;
 	UObject* ActorObject = OwnerComp.GetBlackboardComponent()->GetValueAsObject(InTargetToFaceKey.SelectedKeyName);
 	AActor* TargetActor = Cast<AActor>(ActorObject);
 
@@ -75,6 +76,7 @@ void UBTTask_RotateToFaceTarget::TickTask(UBehaviorTreeComponent& OwnerComp, uin
 	if (!Memory->IsValid())
 	{
 		FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
+        return;
 	}
 
 	if (HasReachedAnglePrecision(Memory->OwningPawn.Get(), Memory->TargetActor.Get()))
@@ -84,8 +86,13 @@ void UBTTask_RotateToFaceTarget::TickTask(UBehaviorTreeComponent& OwnerComp, uin
 	}
 	else
 	{
-		const FRotator LookAtRot = UKismetMathLibrary::FindLookAtRotation(Memory->OwningPawn->GetActorLocation(), Memory->TargetActor->GetActorLocation());
-		const FRotator TargetRot = FMath::RInterpTo(Memory->OwningPawn->GetActorRotation(), LookAtRot, DeltaSeconds, RotationInterpSpeed);
+		// Ground characters turn around their upright capsule, so both interpolation
+		// and completion must measure yaw. Movement can otherwise erase the pitch
+		// that this task is waiting to reach, leaving it running indefinitely.
+		const FVector Direction = Memory->TargetActor->GetActorLocation() - Memory->OwningPawn->GetActorLocation();
+		const FRotator LookAtRot(0.f, Direction.Rotation().Yaw, 0.f);
+		const FRotator CurrentRot(0.f, Memory->OwningPawn->GetActorRotation().Yaw, 0.f);
+		const FRotator TargetRot = FMath::RInterpTo(CurrentRot, LookAtRot, DeltaSeconds, RotationInterpSpeed);
 
 		Memory->OwningPawn->SetActorRotation(TargetRot);
 	}
@@ -93,10 +100,11 @@ void UBTTask_RotateToFaceTarget::TickTask(UBehaviorTreeComponent& OwnerComp, uin
 
 bool UBTTask_RotateToFaceTarget::HasReachedAnglePrecision(APawn* QueryPawn, AActor* TargetActor) const
 {
-	const FVector OwnerForward = QueryPawn->GetActorForwardVector();
-	const FVector OwnerToTargetNormalized = (TargetActor->GetActorLocation() - QueryPawn->GetActorLocation()).GetSafeNormal();
+	const FVector OwnerForward = QueryPawn->GetActorForwardVector().GetSafeNormal2D();
+	const FVector OwnerToTargetNormalized = (TargetActor->GetActorLocation() - QueryPawn->GetActorLocation()).GetSafeNormal2D();
+	if (OwnerToTargetNormalized.IsNearlyZero()) return true;
 
-	const float DotResult = FVector::DotProduct(OwnerForward, OwnerToTargetNormalized);
+	const float DotResult = FMath::Clamp(FVector::DotProduct(OwnerForward, OwnerToTargetNormalized), -1.f, 1.f);
 	const float AngleDiff = UKismetMathLibrary::DegAcos(DotResult);
 
 	return AngleDiff <= AnglePrecision;

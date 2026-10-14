@@ -59,6 +59,16 @@ public:
     UFUNCTION(BlueprintCallable, Category = "RPGDemo|Multiplayer")
     void DisconnectToMainMenu();
 
+    // Existing lobby widgets still use these names from the room-based flow.
+    UFUNCTION(BlueprintCallable, Category = "RPGDemo|Multiplayer")
+    void ReturnToMainMenu();
+
+    UFUNCTION(BlueprintPure, Category = "RPGDemo|Multiplayer")
+    bool IsRoomHost() const;
+
+    UFUNCTION(BlueprintPure, Category = "RPGDemo|Multiplayer")
+    FString GetCurrentRoomCode() const;
+
     UFUNCTION(BlueprintPure, Category = "RPGDemo|Multiplayer")
     FString GetResolvedDedicatedServerEndpoint() const;
 

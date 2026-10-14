@@ -26,13 +26,15 @@ class RPGDEMO_API UPawnCombatComponent : public UPawnExtensionComponentBase
 	GENERATED_BODY()
 
 public:
+    UPawnCombatComponent();
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Combat")
 	void RegisterSpawnedWeapon(FGameplayTag InWeaponTagToRegister, ARPGDemoWeaponBase* InWeaponToRegister,bool bReigsterAsEquippedWeapon = false);
 
 	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Combat")
 	ARPGDemoWeaponBase* GetCharacterCarriedWeaponByTag(FGameplayTag InWeaponTagToGet) const;
 
-	UPROPERTY(BlueprintReadWrite, Category = "RPGDemo|Combat")
+	UPROPERTY(ReplicatedUsing = OnRep_EquippedWeapon, BlueprintReadWrite, Category = "RPGDemo|Combat")
 	FGameplayTag CurrentlyEquippedWeaponTag;
 
 	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Combat")
@@ -41,17 +43,24 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Combat")
 	void ToggleWeaponCollision(bool bShouldEnable, EToggleDamageType ToggleDamageType = EToggleDamageType::CurrentEquippedWeapon);
 
+    void ResetDamageCollision();
+    UFUNCTION(BlueprintCallable, Category = "RPGDemo|Combat") void SetEquippedWeaponTag(FGameplayTag WeaponTag);
+    void UnregisterWeapon(ARPGDemoWeaponBase* Weapon);
+
 	virtual void OnHitTargetActor(AActor* HitActor);
 	virtual void OnWeaponPulledFromTargetActor(AActor* InteractedActor);
 
 protected:
+    virtual void RefreshEquippedWeaponPresentation() {}
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void ToggleCurrentEquippedWeaponCollision(bool bShouldEnable);
 	virtual void ToggleBodyCollision(bool bShouldEnable, EToggleDamageType ToggleDamageType);
 
 	TArray<AActor*> OverlappedActors;
 
 private:
-	TMap<FGameplayTag, ARPGDemoWeaponBase*> CharacterCarriedWeaponMap;
+    UFUNCTION() void OnRep_EquippedWeapon();
+	TMap<FGameplayTag, TWeakObjectPtr<ARPGDemoWeaponBase>> CharacterCarriedWeaponMap;
 
 
 };

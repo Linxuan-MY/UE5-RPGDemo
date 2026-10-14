@@ -10,9 +10,11 @@ function Invoke-AuditTool([string]$Name, [hashtable]$Arguments) {
 }
 # The C++ test owns its disposable PIE worlds; no editor assets are edited.
 Invoke-AuditTool 'DiscoverTests' @{} | Out-Null
-$result = Invoke-AuditTool 'RunTests' @{testNames=@('RPGDemo.Network.EndpointValidation','RPGDemo.Network.SpawnAbilityPolicies','RPGDemo.Network.DedicatedServerContracts','RPGDemo.Network.BlueprintEnemyDeath')}
+$testNames = @('RPGDemo.Network.EndpointValidation','RPGDemo.Network.SpawnAbilityPolicies','RPGDemo.Network.DedicatedServerContracts','RPGDemo.Network.BlueprintEnemyDeath','RPGDemo.Network.GlacerDeathCleanup','RPGDemo.Network.GiantDeathCleanup','RPGDemo.Network.ImmediateDeathWithoutWeapon')
+$result = Invoke-AuditTool 'RunTests' @{testNames=$testNames}
 $reportDirectory = Join-Path (Split-Path -Parent $PSScriptRoot) 'Saved/Automation/NetworkAudit'
 New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
 $result | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $reportDirectory 'results.json')
 $result | ConvertTo-Json -Depth 30
-if ($result.failed -ne 0 -or $result.passed -ne 4) { exit 1 }
+if ($result.failed -ne 0 -or $result.passed -ne $testNames.Count) { exit 1 }
+exit 0

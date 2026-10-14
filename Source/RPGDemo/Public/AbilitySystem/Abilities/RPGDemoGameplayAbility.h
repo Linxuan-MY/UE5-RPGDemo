@@ -28,6 +28,7 @@ class RPGDEMO_API URPGDemoGameplayAbility : public UGameplayAbility
 protected:
 	//~Begin UGameplayAbility interface
 	virtual void OnGiveAbility(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec) override;
+	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
 	//~End UGameplayAbility interface
 
@@ -36,6 +37,11 @@ protected:
 
 	UFUNCTION(BlueprintPure, Category = "RPGDemo|Ability")
 	UPawnCombatComponent* GetPawnCombatComponentFromActorInfo() const;
+
+    UFUNCTION(BlueprintCallable, Category = "RPGDemo|Ability")
+    void SetHitReactFlashEnabled(bool bEnabled);
+
+    bool bHitReactFlashActive = false;
 
 	UFUNCTION(BlueprintPure, Category = "RPGDemo|Ability")
 	URPGDemoAbilitySystemComponent* GetRPGDemoAbilitySystemComponentFromActorInfo() const;

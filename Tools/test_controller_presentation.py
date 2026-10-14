@@ -13,7 +13,8 @@ class ControllerPresentationTests(unittest.TestCase):
         self.assertIn("ShowTransientMessage", header)
         self.assertIn("ShowResultScreen", header)
         self.assertIn("IsLocalController()", source)
-        self.assertIn("WBP_WaveTextWithCountDown", source)
+        self.assertIn("CountdownWidgetClass", header)
+        self.assertIn("CreateWidget<UUserWidget>(this, CountdownWidgetClass)", source)
         self.assertIn("WBP_WinScreen", source)
         self.assertIn("WBP_LoseScreen", source)
 

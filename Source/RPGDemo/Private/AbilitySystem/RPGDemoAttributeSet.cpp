@@ -12,6 +12,8 @@
 #include "Net/UnrealNetwork.h"
 #include "RPGDemoFunctionLibrary.h"
 #include "RPGDemoGameplayTags.h"
+#include "Combat/RPGDemoCombatLog.h"
+#include "Components/Combat/PawnCombatComponent.h"
 
 URPGDemoAttributeSet::URPGDemoAttributeSet()
 {
@@ -57,6 +59,17 @@ void URPGDemoAttributeSet::BroadcastRageToUI() const
     }
 }
 
+void URPGDemoAttributeSet::SynchronizeRageStatus()
+{
+    UAbilitySystemComponent* ASC = GetOwningAbilitySystemComponent();
+    if (!ASC || !ASC->GetOwner() || !ASC->GetOwner()->HasAuthority()) return;
+    ASC->SetLooseGameplayTagCount(RPGDemoGameplayTags::Player_Status_Rage_Full,
+        GetMaxRage() > 0.f && GetCurrentRage() >= GetMaxRage() ? 1 : 0, EGameplayTagReplicationState::TagAndCountToAll);
+    ASC->SetLooseGameplayTagCount(RPGDemoGameplayTags::Player_Status_Rage_None,
+        GetCurrentRage() <= 0.f ? 1 : 0, EGameplayTagReplicationState::TagAndCountToAll);
+    BroadcastRageToUI();
+}
+
 void URPGDemoAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
 {
     AActor* Avatar = Data.Target.GetAvatarActor();
@@ -71,35 +84,33 @@ void URPGDemoAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCal
     else if (Data.EvaluatedData.Attribute == GetCurrentRageAttribute())
     {
         SetCurrentRage(FMath::Clamp(GetCurrentRage(), 0.f, GetMaxRage()));
-        if (Avatar)
-        {
-            if (GetCurrentRage() >= GetMaxRage())
-            {
-                URPGDemoFunctionLibrary::RemoveGameplayTagFromActorIfFound(Avatar, RPGDemoGameplayTags::Player_Status_Rage_None);
-                URPGDemoFunctionLibrary::AddGameplayTagToActorIfNone(Avatar, RPGDemoGameplayTags::Player_Status_Rage_Full);
-            }
-            else if (GetCurrentRage() <= 0.f)
-            {
-                URPGDemoFunctionLibrary::RemoveGameplayTagFromActorIfFound(Avatar, RPGDemoGameplayTags::Player_Status_Rage_Full);
-                URPGDemoFunctionLibrary::AddGameplayTagToActorIfNone(Avatar, RPGDemoGameplayTags::Player_Status_Rage_None);
-            }
-            else
-            {
-                URPGDemoFunctionLibrary::RemoveGameplayTagFromActorIfFound(Avatar, RPGDemoGameplayTags::Player_Status_Rage_Full);
-                URPGDemoFunctionLibrary::RemoveGameplayTagFromActorIfFound(Avatar, RPGDemoGameplayTags::Player_Status_Rage_None);
-            }
-        }
+        SynchronizeRageStatus();
         BroadcastRageToUI();
     }
     else if (Data.EvaluatedData.Attribute == GetDamageTakenAttribute())
     {
-        SetCurrentHealth(FMath::Clamp(GetCurrentHealth() - GetDamageTaken(), 0.f, GetMaxHealth()));
+        const float Damage = FMath::Max(0.f, GetDamageTaken());
+        // DamageTaken is a per-effect meta attribute, including on a persistent PlayerState ASC.
+        SetDamageTaken(0.f);
+        const float HealthBefore = GetCurrentHealth();
+        SetCurrentHealth(FMath::Clamp(HealthBefore - Damage, 0.f, GetMaxHealth()));
+        AActor* Instigator = Data.EffectSpec.GetContext().GetOriginalInstigator();
+        if (RPGDemoCombat::IsDebugEnabled())
+            UE_LOG(LogRPGDemoCombat, Log, TEXT("Damage source=%s target=%s amount=%.3f healthBefore=%.3f healthAfter=%.3f"),
+                *GetNameSafe(Instigator), *GetNameSafe(Avatar), Damage, HealthBefore, GetCurrentHealth());
+        const bool bMeleeDamage = Data.EffectSpec.SetByCallerTagMagnitudes.Contains(RPGDemoGameplayTags::Player_SetByCaller_AttackType_Light)
+            || Data.EffectSpec.SetByCallerTagMagnitudes.Contains(RPGDemoGameplayTags::Player_SetByCaller_AttackType_Heavy);
+        if (Avatar && Avatar->HasAuthority() && HealthBefore > GetCurrentHealth() && bMeleeDamage)
+            if (ARPGDemoHeroCharacter* Attacker = Cast<ARPGDemoHeroCharacter>(Instigator)) Attacker->NotifyConfirmedMeleeHit();
         if (PawnUI) BroadcastHealthToUI();
         UAbilitySystemComponent* ASC = &Data.Target;
         if (GetCurrentHealth() <= 0.f && Avatar && ASC &&
             !ASC->HasMatchingGameplayTag(RPGDemoGameplayTags::Shared_Status_Dead))
         {
+            if (UPawnCombatComponent* Combat = Avatar->FindComponentByClass<UPawnCombatComponent>()) Combat->ResetDamageCollision();
             if (ARPGDemoEnemyCharacter* Enemy = Cast<ARPGDemoEnemyCharacter>(Avatar)) Enemy->BeginReplicatedDeathPresentation();
+            else if (ARPGDemoBaseCharacter* Character = Cast<ARPGDemoBaseCharacter>(Avatar)) Character->BeginCharacterDeath();
+            URPGDemoFunctionLibrary::AddGameplayTagToActorIfNone(Avatar, RPGDemoGameplayTags::Shared_Status_Dead);
             if (ARPGDemoHeroCharacter* Hero = Cast<ARPGDemoHeroCharacter>(Avatar))
             {
                 if (ARPGDemoSurvivalGameMode* Mode = Hero->GetWorld()->GetAuthGameMode<ARPGDemoSurvivalGameMode>())
@@ -107,7 +118,6 @@ void URPGDemoAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCal
                     Mode->NotifyPlayerDied(Hero->GetController());
                 }
             }
-            URPGDemoFunctionLibrary::AddGameplayTagToActorIfNone(Avatar, RPGDemoGameplayTags::Shared_Status_Dead);
         }
     }
 }

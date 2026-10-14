@@ -30,6 +30,7 @@ UCLASS()
 class RPGDEMO_API UBTTask_RotateToFaceTarget : public UBTTaskNode
 {
 	GENERATED_BODY()
+	friend class FRPGDemoNetworkRegressionCommand;
 
 	UBTTask_RotateToFaceTarget();
 

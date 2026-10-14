@@ -20,8 +20,12 @@ class RPGDEMO_API UDataAsset_StartUpDataBase : public UDataAsset
 
 public:
 	virtual void GiveToAbilitySystemComponent(URPGDemoAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1);
+    void GiveAvatarAbilitiesToAbilitySystemComponent(URPGDemoAbilitySystemComponent* ASC, int32 ApplyLevel = 1);
 
 protected:
+    // Equipment belongs to the pawn; persistent PlayerState attributes do not.
+    UPROPERTY(EditDefaultsOnly, Category = "StartUpData")
+    TArray<TSubclassOf<URPGDemoGameplayAbility>> AvatarStartUpAbilities;
 	UPROPERTY(EditDefaultsOnly, Category = "StartUpData")
 	TArray < TSubclassOf < URPGDemoGameplayAbility > > ActivateOnGivenAbilities;
 	
@@ -31,5 +35,5 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "StartUpData")
 	TArray< TSubclassOf<UGameplayEffect> > StartUpGameplayEffects;
 
-	void GrantAbilities(const TArray<TSubclassOf<URPGDemoGameplayAbility>>& InAbilitiesToGive, URPGDemoAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1);
+	void GrantAbilities(const TArray<TSubclassOf<URPGDemoGameplayAbility>>& InAbilitiesToGive, URPGDemoAbilitySystemComponent* InASCToGive, int32 ApplyLevel = 1, UObject* SourceObject = nullptr);
 };

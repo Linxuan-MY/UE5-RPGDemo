@@ -9,6 +9,7 @@
 
 class ARPGDemoEnemyCharacter;
 class ARPGDemoPlayerState;
+struct FStreamableHandle;
 
 USTRUCT(BlueprintType)
 struct FRPGDemoEnemyWaveSpawnerInfo
@@ -33,6 +34,8 @@ UCLASS()
 class RPGDEMO_API ARPGDemoSurvivalGameMode : public ARPGDemoBaseGameMode
 {
     GENERATED_BODY()
+    friend class ARPGDemoCombatTestHarness;
+    friend class ARPGDemoLifecycleTestHarness;
 
 public:
     UFUNCTION(BlueprintCallable) void RegisterSpawnedEnemies(const TArray<ARPGDemoEnemyCharacter*>& InEnemiesToRegister);
@@ -45,11 +48,18 @@ protected:
     virtual void Logout(AController* Exiting) override;
     virtual void PreLogin(const FString& Options, const FString& Address,
         const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
+    virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
+    virtual APawn* SpawnDefaultPawnAtTransform_Implementation(AController* NewPlayer, const FTransform& SpawnTransform) override;
+    virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
     void SetCurrentSurvivalGameModeState(ERPGDemoSurvivalGameModeState NewState);
     void EnterTerminalState(ERPGDemoSurvivalGameModeState TerminalState);
     bool HasFinishedAllWaves() const;
+    bool IsMatchTerminal() const;
+    void CancelWavePreload();
+    bool IsWavePreloadReady() const;
     void PreLoadNextWaveEnemies();
     FRPGDemoEnemyWaveSpawnerTableRow* GetCurrentWaveSpawnerTableRow() const;
     int32 TrySpawnWaveEnemies();
@@ -57,6 +67,7 @@ private:
     UFUNCTION() void OnEnemyDestroyed(AActor* DestroyedActor);
 
     void RespawnPlayer(TWeakObjectPtr<ARPGDemoPlayerState> PlayerState, TWeakObjectPtr<APawn> OldPawn);
+    void ScheduleRespawn(ARPGDemoPlayerState* PlayerState, APawn* OldPawn, float DelaySeconds);
     void CancelAllRespawns();
     void RecalculateLivingPlayers();
     APawn* FindLivingPawn(const ARPGDemoPlayerState* ExcludedPlayerState = nullptr) const;
@@ -81,4 +92,8 @@ private:
     TMap<TWeakObjectPtr<ARPGDemoPlayerState>, FTimerHandle> RespawnTimers;
     FTimerHandle ReturnToLobbyTimer;
     bool bMultiplayerMatch = false;
+    TArray<TSharedPtr<FStreamableHandle>> WavePreloadHandles;
+    int32 PendingWaveLoads = 0;
+    int32 WaveSpawnFailures = 0;
+    TSet<TWeakObjectPtr<ARPGDemoPlayerState>> InitializedMatchPlayers;
 };

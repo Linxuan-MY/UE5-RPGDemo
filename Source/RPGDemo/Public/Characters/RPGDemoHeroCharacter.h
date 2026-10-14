@@ -19,6 +19,7 @@ class RPGDEMO_API ARPGDemoHeroCharacter : public ARPGDemoBaseCharacter
 {
     GENERATED_BODY()
     friend class FRPGDemoNetworkRegressionCommand;
+    friend class ARPGDemoLifecycleTestHarness;
 
 public:
     ARPGDemoHeroCharacter();
@@ -30,16 +31,25 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "RPGDemo|Movement")
     FVector GetNetworkMovementInputDirection() const;
+    void NotifyConfirmedMeleeHit();
+    void RefreshStoneInteraction();
 
 protected:
     virtual void PossessedBy(AController* NewController) override;
     virtual void OnRep_PlayerState() override;
     virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
     void InitializeAbilitySystemFromPlayerState();
     void GrantPersistentHeroStartUpData();
+    bool bAvatarStartUpDataGranted = false;
+    FTimerHandle LocalPresentationTimer;
+    bool bStoneInteractionAvailable = false;
+    uint32 ConfirmedMeleeHitSequence = 0;
+    uint32 LastLocalMeleeHitSequence = 0;
+    UFUNCTION(Client, Reliable) void ClientConfirmMeleeHit(uint32 Sequence);
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
     TObjectPtr<USpringArmComponent> CameraBoom;

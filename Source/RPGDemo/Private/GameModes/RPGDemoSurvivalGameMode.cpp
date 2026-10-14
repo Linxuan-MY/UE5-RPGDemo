@@ -8,8 +8,11 @@
 #include "Characters/RPGDemoHeroCharacter.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
 #include "Engine/TargetPoint.h"
+#include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerStart.h"
 #include "GameFramework/PlayerController.h"
 #include "GameModes/RPGDemoPlayerState.h"
 #include "Kismet/GameplayStatics.h"
@@ -21,6 +24,7 @@
 namespace RPGDemoMatch
 {
     const FString LobbyTravel(TEXT("/Game/Maps/MultiplayerLobbyMap?game=/Script/RPGDemo.RPGDemoLobbyGameMode"));
+    constexpr float RespawnRetrySeconds = 1.f;
 }
 
 void ARPGDemoSurvivalGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
@@ -55,12 +59,13 @@ void ARPGDemoSurvivalGameMode::PreLogin(const FString& Options, const FString& A
 void ARPGDemoSurvivalGameMode::BeginPlay()
 {
     Super::BeginPlay();
-    checkf(EnemyWaveSpawnerDataTable, TEXT("Forgot to assign a valid data table"));
-    TotalWavesToSpawn = EnemyWaveSpawnerDataTable->GetRowNames().Num();
-    if (ARPGDemoGameState* State = GetGameState<ARPGDemoGameState>())
+    if (!EnemyWaveSpawnerDataTable || EnemyWaveSpawnerDataTable->GetRowNames().IsEmpty())
     {
-        State->SetWaveProgress(CurrentWaveCount, TotalWavesToSpawn);
+        UE_LOG(LogTemp, Error, TEXT("Survival match has no valid enemy wave table"));
+        EnterTerminalState(ERPGDemoSurvivalGameModeState::TeamDefeated);
+        return;
     }
+    TotalWavesToSpawn = EnemyWaveSpawnerDataTable->GetRowNames().Num();
     SetCurrentSurvivalGameModeState(ERPGDemoSurvivalGameModeState::WaitSpawnNewWave);
     PreLoadNextWaveEnemies();
 }
@@ -81,16 +86,32 @@ void ARPGDemoSurvivalGameMode::Tick(float DeltaTime)
     else if (CurrentSurvivalGameModeState == ERPGDemoSurvivalGameModeState::SpawningNewWave &&
         TimePassedSinceStart >= SpawnEnemiesDelayTime)
     {
+        if (PendingWaveLoads > 0 && TimePassedSinceStart < 20.f) return;
         TimePassedSinceStart = 0.f;
+        if (!IsWavePreloadReady())
+        {
+            UE_LOG(LogTemp, Error, TEXT("Wave %d preload failed or timed out (pending=%d)"), CurrentWaveCount, PendingWaveLoads);
+            if (++WaveSpawnFailures >= 3) EnterTerminalState(ERPGDemoSurvivalGameModeState::TeamDefeated);
+            else PreLoadNextWaveEnemies();
+            return;
+        }
         CurrentSpawnedEnemiesCounter += TrySpawnWaveEnemies();
-        SetCurrentSurvivalGameModeState(ERPGDemoSurvivalGameModeState::InProgress);
+        if (CurrentSpawnedEnemiesCounter > 0)
+        {
+            WaveSpawnFailures = 0;
+            SetCurrentSurvivalGameModeState(ERPGDemoSurvivalGameModeState::InProgress);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Wave %d generated no enemies, attempt %d"), CurrentWaveCount, WaveSpawnFailures + 1);
+            if (++WaveSpawnFailures >= 3) EnterTerminalState(ERPGDemoSurvivalGameModeState::TeamDefeated);
+        }
     }
     else if (CurrentSurvivalGameModeState == ERPGDemoSurvivalGameModeState::WaveCompleted &&
         TimePassedSinceStart >= WaveCompletedWaitTime)
     {
         TimePassedSinceStart = 0.f;
         ++CurrentWaveCount;
-        if (ARPGDemoGameState* State = GetGameState<ARPGDemoGameState>()) State->SetWaveProgress(CurrentWaveCount, TotalWavesToSpawn);
         if (HasFinishedAllWaves()) EnterTerminalState(ERPGDemoSurvivalGameModeState::AllWavesDone);
         else
         {
@@ -102,6 +123,8 @@ void ARPGDemoSurvivalGameMode::Tick(float DeltaTime)
 
 void ARPGDemoSurvivalGameMode::SetCurrentSurvivalGameModeState(ERPGDemoSurvivalGameModeState NewState)
 {
+    if (IsMatchTerminal()) return;
+    TimePassedSinceStart = 0.f;
     CurrentSurvivalGameModeState = NewState;
     OnSurvivalGameModeStateChanged.Broadcast(NewState);
     float Duration = 0.f;
@@ -116,7 +139,9 @@ void ARPGDemoSurvivalGameMode::SetCurrentSurvivalGameModeState(ERPGDemoSurvivalG
 
 void ARPGDemoSurvivalGameMode::EnterTerminalState(ERPGDemoSurvivalGameModeState TerminalState)
 {
-    if (TerminalState == ERPGDemoSurvivalGameModeState::TeamDefeated) CancelAllRespawns();
+    if (IsMatchTerminal()) return;
+    CancelAllRespawns();
+    CancelWavePreload();
     CurrentSurvivalGameModeState = TerminalState;
     TimePassedSinceStart = 0.f;
     OnSurvivalGameModeStateChanged.Broadcast(TerminalState);
@@ -134,33 +159,67 @@ void ARPGDemoSurvivalGameMode::EnterTerminalState(ERPGDemoSurvivalGameModeState 
 
 bool ARPGDemoSurvivalGameMode::HasFinishedAllWaves() const { return CurrentWaveCount > TotalWavesToSpawn; }
 
+bool ARPGDemoSurvivalGameMode::IsMatchTerminal() const
+{
+    return CurrentSurvivalGameModeState == ERPGDemoSurvivalGameModeState::AllWavesDone ||
+        CurrentSurvivalGameModeState == ERPGDemoSurvivalGameModeState::TeamDefeated;
+}
+
+void ARPGDemoSurvivalGameMode::CancelWavePreload()
+{
+    for (const auto& Handle : WavePreloadHandles) if (Handle.IsValid()) Handle->CancelHandle();
+    WavePreloadHandles.Empty();
+    PendingWaveLoads = 0;
+}
+
+bool ARPGDemoSurvivalGameMode::IsWavePreloadReady() const
+{
+    const auto* Row = GetCurrentWaveSpawnerTableRow();
+    if (!Row || Row->TotalEnemyToSpawnThisWave <= 0 || Row->EnemyWaveSpawnerDefinitions.IsEmpty()) return false;
+    for (const auto& Info : Row->EnemyWaveSpawnerDefinitions)
+        if (Info.SoftEnemyClassToSpawn.IsNull() || !PreloadedEnemyClassMap.Contains(Info.SoftEnemyClassToSpawn)) return false;
+    return PendingWaveLoads == 0;
+}
+
 void ARPGDemoSurvivalGameMode::PreLoadNextWaveEnemies()
 {
-    if (HasFinishedAllWaves()) return;
+    if (IsMatchTerminal() || HasFinishedAllWaves()) return;
+    CancelWavePreload();
     PreloadedEnemyClassMap.Empty();
-    for (const FRPGDemoEnemyWaveSpawnerInfo& Info : GetCurrentWaveSpawnerTableRow()->EnemyWaveSpawnerDefinitions)
+    const auto* Row = GetCurrentWaveSpawnerTableRow();
+    if (!Row) return;
+    const int32 LoadingWave = CurrentWaveCount;
+    for (const FRPGDemoEnemyWaveSpawnerInfo& Info : Row->EnemyWaveSpawnerDefinitions)
     {
         if (Info.SoftEnemyClassToSpawn.IsNull()) continue;
-        UAssetManager::GetStreamableManager().RequestAsyncLoad(Info.SoftEnemyClassToSpawn.ToSoftObjectPath(),
-            FStreamableDelegate::CreateWeakLambda(this, [this, Info]()
+        ++PendingWaveLoads;
+        const auto Handle = UAssetManager::GetStreamableManager().RequestAsyncLoad(Info.SoftEnemyClassToSpawn.ToSoftObjectPath(),
+            FStreamableDelegate::CreateWeakLambda(this, [this, Info, LoadingWave]()
             {
+                if (IsMatchTerminal() || CurrentWaveCount != LoadingWave) return;
+                PendingWaveLoads = FMath::Max(0, PendingWaveLoads - 1);
                 if (UClass* LoadedClass = Info.SoftEnemyClassToSpawn.Get()) PreloadedEnemyClassMap.Emplace(Info.SoftEnemyClassToSpawn, LoadedClass);
+                else UE_LOG(LogTemp, Error, TEXT("Could not load wave %d enemy %s"), LoadingWave, *Info.SoftEnemyClassToSpawn.ToString());
             }));
+        if (Handle.IsValid()) WavePreloadHandles.Add(Handle);
+        else --PendingWaveLoads;
     }
 }
 
 FRPGDemoEnemyWaveSpawnerTableRow* ARPGDemoSurvivalGameMode::GetCurrentWaveSpawnerTableRow() const
 {
     const FName RowName(*FString::Printf(TEXT("Wave%d"), CurrentWaveCount));
+    if (!EnemyWaveSpawnerDataTable) return nullptr;
     FRPGDemoEnemyWaveSpawnerTableRow* Row = EnemyWaveSpawnerDataTable->FindRow<FRPGDemoEnemyWaveSpawnerTableRow>(RowName, FString());
-    checkf(Row, TEXT("Could not find row %s"), *RowName.ToString());
+    if (!Row) UE_LOG(LogTemp, Error, TEXT("Could not find wave row %s"), *RowName.ToString());
     return Row;
 }
 
 int32 ARPGDemoSurvivalGameMode::TrySpawnWaveEnemies()
 {
+    if (IsMatchTerminal() || !IsWavePreloadReady()) return 0;
     if (TargetPointsArray.IsEmpty()) UGameplayStatics::GetAllActorsOfClass(this, ATargetPoint::StaticClass(), TargetPointsArray);
-    checkf(!TargetPointsArray.IsEmpty(), TEXT("No target points in %s"), *GetWorld()->GetName());
+    if (TargetPointsArray.IsEmpty()) { UE_LOG(LogTemp, Error, TEXT("No wave target points in %s"), *GetWorld()->GetName()); return 0; }
     int32 Spawned = 0;
     FActorSpawnParameters Params;
     Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
@@ -173,8 +232,10 @@ int32 ARPGDemoSurvivalGameMode::TrySpawnWaveEnemies()
         for (int32 Index = 0; Index < Count && ShouldKeepSpawnEnemies(); ++Index)
         {
             AActor* Point = TargetPointsArray[FMath::RandHelper(TargetPointsArray.Num())];
-            FVector Location;
-            UNavigationSystemV1::K2_GetRandomLocationInNavigableRadius(this, Point->GetActorLocation(), Location, 400.f);
+            if (!IsValid(Point)) continue;
+            FVector Location = Point->GetActorLocation();
+            if (!UNavigationSystemV1::K2_GetRandomLocationInNavigableRadius(this, Point->GetActorLocation(), Location, 400.f))
+                Location = Point->GetActorLocation();
             Location.Z += 150.f;
             if (ARPGDemoEnemyCharacter* Enemy = GetWorld()->SpawnActor<ARPGDemoEnemyCharacter>(*LoadedClass, Location, Point->GetActorRotation(), Params))
             {
@@ -188,13 +249,19 @@ int32 ARPGDemoSurvivalGameMode::TrySpawnWaveEnemies()
 
 bool ARPGDemoSurvivalGameMode::ShouldKeepSpawnEnemies() const
 {
-    return TotalSpawnedEnemiesThisWaveCounter < GetCurrentWaveSpawnerTableRow()->TotalEnemyToSpawnThisWave;
+    const auto* Row = GetCurrentWaveSpawnerTableRow();
+    return !IsMatchTerminal() && Row && TotalSpawnedEnemiesThisWaveCounter < Row->TotalEnemyToSpawnThisWave;
 }
 
 void ARPGDemoSurvivalGameMode::OnEnemyDestroyed(AActor*)
 {
+    if (IsMatchTerminal() || GetWorld()->bIsTearingDown) return;
     CurrentSpawnedEnemiesCounter = FMath::Max(0, CurrentSpawnedEnemiesCounter - 1);
-    if (ShouldKeepSpawnEnemies()) CurrentSpawnedEnemiesCounter += TrySpawnWaveEnemies();
+    if (ShouldKeepSpawnEnemies())
+    {
+        CurrentSpawnedEnemiesCounter += TrySpawnWaveEnemies();
+        if (CurrentSpawnedEnemiesCounter == 0) SetCurrentSurvivalGameModeState(ERPGDemoSurvivalGameModeState::SpawningNewWave);
+    }
     else if (CurrentSpawnedEnemiesCounter == 0)
     {
         TotalSpawnedEnemiesThisWaveCounter = 0;
@@ -212,11 +279,12 @@ void ARPGDemoSurvivalGameMode::RegisterSpawnedEnemies(const TArray<ARPGDemoEnemy
 
 void ARPGDemoSurvivalGameMode::NotifyPlayerDied(AController* DeadController)
 {
-    if (!HasAuthority() || !DeadController || CurrentSurvivalGameModeState == ERPGDemoSurvivalGameModeState::TeamDefeated) return;
+    if (!HasAuthority() || !DeadController || IsMatchTerminal()) return;
     ARPGDemoPlayerState* PlayerState = DeadController->GetPlayerState<ARPGDemoPlayerState>();
     APawn* OldPawn = DeadController->GetPawn();
     if (!PlayerState || PlayerState->LifeState == ERPGDemoPlayerLifeState::Dead || !OldPawn) return;
 
+    if (ARPGDemoHeroCharacter* Hero = Cast<ARPGDemoHeroCharacter>(OldPawn)) Hero->BeginCharacterDeath();
     URPGDemoAbilitySystemComponent* ASC = PlayerState->GetRPGDemoAbilitySystemComponent();
     if (ASC)
     {
@@ -231,7 +299,6 @@ void ARPGDemoSurvivalGameMode::NotifyPlayerDied(AController* DeadController)
     if (ARPGDemoHeroCharacter* Hero = Cast<ARPGDemoHeroCharacter>(OldPawn))
     {
         Hero->GetCharacterMovement()->StopMovementImmediately();
-        Hero->GetCharacterMovement()->DisableMovement();
         Hero->GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     }
 
@@ -248,13 +315,74 @@ void ARPGDemoSurvivalGameMode::NotifyPlayerDied(AController* DeadController)
 
     RecalculateLivingPlayers();
     if (CurrentSurvivalGameModeState == ERPGDemoSurvivalGameModeState::TeamDefeated) return;
+    ScheduleRespawn(PlayerState, OldPawn, RespawnDelaySeconds);
+    UpdateSpectators();
+}
+
+void ARPGDemoSurvivalGameMode::ScheduleRespawn(ARPGDemoPlayerState* PlayerState, APawn* OldPawn, float DelaySeconds)
+{
     FTimerHandle& Timer = RespawnTimers.FindOrAdd(PlayerState);
     GetWorldTimerManager().SetTimer(Timer,
         FTimerDelegate::CreateWeakLambda(this, [this, WeakState = TWeakObjectPtr<ARPGDemoPlayerState>(PlayerState), WeakPawn = TWeakObjectPtr<APawn>(OldPawn)]()
         {
             RespawnPlayer(WeakState, WeakPawn);
-        }), RespawnDelaySeconds, false);
-    UpdateSpectators();
+        }), DelaySeconds, false);
+}
+
+AActor* ARPGDemoSurvivalGameMode::ChoosePlayerStart_Implementation(AController* Player)
+{
+    if (AActor* Start = Super::ChoosePlayerStart_Implementation(Player)) return Start;
+    const ARPGDemoPlayerState* State = Player ? Player->GetPlayerState<ARPGDemoPlayerState>() : nullptr;
+    // Keep the nearby-space search anchored to a real spawn point when every
+    // start is blocked; GameModeBase otherwise falls back to world origin.
+    if (State && State->LifeState == ERPGDemoPlayerLifeState::Dead)
+        for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It) return *It;
+    return nullptr;
+}
+
+APawn* ARPGDemoSurvivalGameMode::SpawnDefaultPawnAtTransform_Implementation(AController* NewPlayer, const FTransform& SpawnTransform)
+{
+    const ARPGDemoPlayerState* State = NewPlayer ? NewPlayer->GetPlayerState<ARPGDemoPlayerState>() : nullptr;
+    if (!State || State->LifeState != ERPGDemoPlayerLifeState::Dead)
+        return Super::SpawnDefaultPawnAtTransform_Implementation(NewPlayer, SpawnTransform);
+
+    UClass* PawnClass = GetDefaultPawnClassForController(NewPlayer);
+    const APawn* PawnTemplate = PawnClass ? PawnClass->GetDefaultObject<APawn>() : nullptr;
+    if (!PawnTemplate) return nullptr;
+    const FRotator Rotation = SpawnTransform.Rotator();
+    const auto TryLocation = [this, NewPlayer, PawnTemplate, &Rotation](const FVector& Candidate) -> APawn*
+    {
+        FVector Location = Candidate;
+        if (!GetWorld()->FindTeleportSpot(PawnTemplate, Location, Rotation) ||
+            FVector::DistSquared(Location, Candidate) > FMath::Square(200.f)) return nullptr;
+        return Super::SpawnDefaultPawnAtTransform_Implementation(NewPlayer, FTransform(Rotation, Location));
+    };
+    if (APawn* Pawn = TryLocation(SpawnTransform.GetLocation())) return Pawn;
+
+    // A cached PlayerStart can be occupied by the boss or a teammate. Search
+    // walkable nearby positions without forcing a pawn into blocking geometry.
+    UNavigationSystemV1* Navigation = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+    const UCapsuleComponent* Capsule = PawnTemplate->FindComponentByClass<UCapsuleComponent>();
+    if (!Navigation || !Capsule) return nullptr;
+    TArray<FVector> Origins{SpawnTransform.GetLocation()};
+    for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It) Origins.AddUnique(It->GetActorLocation());
+    for (const FVector& Origin : Origins)
+        for (const float Radius : {200.f, 400.f, 800.f, 1200.f})
+            for (int32 Direction = 0; Direction < 8; ++Direction)
+            {
+                const float Angle = Direction * PI / 4.f;
+                const FVector Candidate = Origin + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * Radius;
+                FNavLocation Ground;
+                if (!Navigation->ProjectPointToNavigation(Candidate, Ground, FVector(100.f, 100.f, 250.f))) continue;
+                const FVector Location = Ground.Location + FVector(0.f, 0.f, Capsule->GetScaledCapsuleHalfHeight() + 2.f);
+                if (APawn* Pawn = TryLocation(Location))
+                {
+                    UE_LOG(LogTemp, Log, TEXT("Respawn relocated for %s from %s to %s"),
+                        *State->GetName(), *SpawnTransform.GetLocation().ToString(), *Pawn->GetActorLocation().ToString());
+                    return Pawn;
+                }
+            }
+    return nullptr;
 }
 
 void ARPGDemoSurvivalGameMode::RespawnPlayer(TWeakObjectPtr<ARPGDemoPlayerState> PlayerState, TWeakObjectPtr<APawn> OldPawn)
@@ -265,15 +393,38 @@ void ARPGDemoSurvivalGameMode::RespawnPlayer(TWeakObjectPtr<ARPGDemoPlayerState>
     AController* Controller = Cast<AController>(PlayerState->GetOwner());
     if (!Controller) return;
     if (OldPawn.IsValid()) OldPawn->Destroy();
-    Controller->ChangeState(NAME_Playing);
-    RestartPlayer(Controller);
+    // StartSpectatingOnly also marks PlayerState as spectator-only. Leaving the
+    // controller state alone does not clear that flag, so RestartPlayer refuses
+    // to spawn the new pawn. Clear death before its startup abilities run.
+    PlayerState->SetIsOnlyASpectator(false);
+    PlayerState->SetIsSpectator(false);
+    // Ask the engine to choose an unoccupied start instead of reusing the last
+    // spawn point unconditionally after every death.
+    Controller->StartSpot.Reset();
     URPGDemoAbilitySystemComponent* ASC = PlayerState->GetRPGDemoAbilitySystemComponent();
+    if (ASC) ASC->SetLooseGameplayTagCount(RPGDemoGameplayTags::Shared_Status_Dead, 0, EGameplayTagReplicationState::TagAndCountToAll);
+    Controller->ChangeState(NAME_Playing);
     URPGDemoAttributeSet* Attributes = PlayerState->GetRPGDemoAttributeSet();
     if (ASC && Attributes)
     {
-        ASC->RemoveLooseGameplayTag(RPGDemoGameplayTags::Shared_Status_Dead);
         ASC->SetNumericAttributeBase(URPGDemoAttributeSet::GetCurrentHealthAttribute(), Attributes->GetMaxHealth());
         ASC->SetNumericAttributeBase(URPGDemoAttributeSet::GetCurrentRageAttribute(), 0.f);
+        Attributes->SynchronizeRageStatus();
+    }
+    RestartPlayer(Controller);
+    if (!IsValid(Controller->GetPawn()))
+    {
+        // Spawn failure is not a team wipe. Keep this player dead/spectating
+        // and retry; the normal living-player check still handles a real wipe.
+        if (ASC) ASC->SetLooseGameplayTagCount(RPGDemoGameplayTags::Shared_Status_Dead, 1, EGameplayTagReplicationState::TagAndCountToAll);
+        if (APlayerController* PC = Cast<APlayerController>(Controller)) PC->StartSpectatingOnly();
+        const double RetryAt = GetGameState<ARPGDemoGameState>()->GetServerWorldTimeSeconds() + RPGDemoMatch::RespawnRetrySeconds;
+        PlayerState->SetLifeState(ERPGDemoPlayerLifeState::Dead, RetryAt);
+        ScheduleRespawn(PlayerState.Get(), nullptr, RPGDemoMatch::RespawnRetrySeconds);
+        UpdateSpectators();
+        UE_LOG(LogTemp, Warning, TEXT("Respawn deferred for %s: no pawn could be spawned; retrying in %.1fs (wave %d)"),
+            *PlayerState->GetName(), RPGDemoMatch::RespawnRetrySeconds, CurrentWaveCount);
+        return;
     }
     PlayerState->SetLifeState(ERPGDemoPlayerLifeState::Alive, 0.0);
     UpdateSpectators();
@@ -315,6 +466,7 @@ void ARPGDemoSurvivalGameMode::UpdateSpectators()
 
 void ARPGDemoSurvivalGameMode::RecalculateLivingPlayers()
 {
+    if (IsMatchTerminal()) return;
     int32 Connected = 0;
     int32 Living = 0;
     for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
@@ -335,6 +487,9 @@ void ARPGDemoSurvivalGameMode::Logout(AController* Exiting)
     {
         if (FTimerHandle* Timer = RespawnTimers.Find(State)) GetWorldTimerManager().ClearTimer(*Timer);
         RespawnTimers.Remove(State);
+        // A dead controller is unpossessed, so the normal Logout pawn cleanup cannot find its corpse.
+        for (TActorIterator<ARPGDemoHeroCharacter> It(GetWorld()); It; ++It)
+            if (It->GetRPGDemoAbilitySystemComponent() == State->GetRPGDemoAbilitySystemComponent() && It->IsDeathPresentationActive()) It->Destroy();
     }
     Super::Logout(Exiting);
     GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
@@ -347,4 +502,26 @@ void ARPGDemoSurvivalGameMode::Logout(AController* Exiting)
 void ARPGDemoSurvivalGameMode::ReturnAllPlayersToLobby()
 {
     if (HasAuthority() && bMultiplayerMatch && GetWorld()) GetWorld()->ServerTravel(RPGDemoMatch::LobbyTravel, true);
+}
+
+
+void ARPGDemoSurvivalGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
+{
+    if (ARPGDemoPlayerState* State = NewPlayer ? NewPlayer->GetPlayerState<ARPGDemoPlayerState>() : nullptr)
+    {
+        if (!InitializedMatchPlayers.Contains(State))
+        {
+            InitializedMatchPlayers.Add(State);
+            State->ResetForNewMatch();
+        }
+    }
+    Super::HandleStartingNewPlayer_Implementation(NewPlayer);
+}
+
+void ARPGDemoSurvivalGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    CancelAllRespawns();
+    CancelWavePreload();
+    GetWorldTimerManager().ClearTimer(ReturnToLobbyTimer);
+    Super::EndPlay(EndPlayReason);
 }

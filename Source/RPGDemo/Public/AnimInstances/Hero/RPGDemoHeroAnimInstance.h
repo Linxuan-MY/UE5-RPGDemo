@@ -18,9 +18,15 @@ class RPGDEMO_API URPGDemoHeroAnimInstance : public URPGDemoCharacterAnimInstanc
 
 public:
 	virtual void NativeInitializeAnimation() override;
+    virtual void NativeUpdateAnimation(float DeltaSeconds) override;
 	virtual void NativeThreadSafeUpdateAnimation(float DeltaSeconds) override;
+    void BeginLocalHitStop(float Duration);
+    float GetLocalHitStopAlpha() const { return LocalHitStopAlpha; }
 
 protected:
+    UPROPERTY(Transient, BlueprintReadOnly, Category = "AnimData|HitFeedback")
+    float LocalHitStopAlpha = 0.f;
+    double LocalHitStopEndRealTime = 0.0;
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "AnimData|References")
 	ARPGDemoHeroCharacter* OwningHeroCharacter;
 

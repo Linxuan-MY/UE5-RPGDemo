@@ -20,6 +20,9 @@
 #include "Items/PickUps/RPGDemoStoneBase.h"
 #include "Net/UnrealNetwork.h"
 #include "RPGDemoGameplayTags.h"
+#include "Combat/RPGDemoCombatLog.h"
+#include "Controllers/RPGDemoHeroController.h"
+#include "TimerManager.h"
 
 ARPGDemoHeroCharacter::ARPGDemoHeroCharacter()
 {
@@ -76,9 +79,11 @@ void ARPGDemoHeroCharacter::InitializeAbilitySystemFromPlayerState()
     if (!RPGDemoPlayerState) return;
     RPGDemoAbilitySystemComponent = RPGDemoPlayerState->GetRPGDemoAbilitySystemComponent();
     RPGDemoAttributeSet = RPGDemoPlayerState->GetRPGDemoAttributeSet();
-    if (RPGDemoAbilitySystemComponent)
+    // Late PlayerState replication on the corpse must not steal a respawned Avatar.
+    if (RPGDemoAbilitySystemComponent && !IsDeathPresentationActive())
     {
         RPGDemoAbilitySystemComponent->InitAbilityActorInfo(RPGDemoPlayerState, this);
+        if (ARPGDemoHeroController* PC = Cast<ARPGDemoHeroController>(GetController())) PC->EnsureHeroHUD();
     }
 }
 
@@ -91,7 +96,7 @@ void ARPGDemoHeroCharacter::GrantPersistentHeroStartUpData()
     }
 
     UDataAsset_StartUpDataBase* LoadedData = CharacterStartUpData.LoadSynchronous();
-    if (!LoadedData || !RPGDemoPlayerState->TryMarkHeroStartUpDataGranted()) return;
+    if (!LoadedData) return;
     int32 AbilityApplyLevel = 1;
     if (const ARPGDemoBaseGameMode* BaseGameMode = GetWorld()->GetAuthGameMode<ARPGDemoBaseGameMode>())
     {
@@ -104,7 +109,29 @@ void ARPGDemoHeroCharacter::GrantPersistentHeroStartUpData()
         default: break;
         }
     }
-    LoadedData->GiveToAbilitySystemComponent(RPGDemoAbilitySystemComponent, AbilityApplyLevel);
+    if (RPGDemoPlayerState->TryMarkHeroStartUpDataGranted())
+        LoadedData->GiveToAbilitySystemComponent(RPGDemoAbilitySystemComponent, AbilityApplyLevel);
+    if (!bAvatarStartUpDataGranted)
+    {
+        bAvatarStartUpDataGranted = true;
+        LoadedData->GiveAvatarAbilitiesToAbilitySystemComponent(RPGDemoAbilitySystemComponent, AbilityApplyLevel);
+    }
+}
+
+void ARPGDemoHeroCharacter::NotifyConfirmedMeleeHit()
+{
+    if (HasAuthority()) ClientConfirmMeleeHit(++ConfirmedMeleeHitSequence);
+}
+
+void ARPGDemoHeroCharacter::ClientConfirmMeleeHit_Implementation(uint32 Sequence)
+{
+    if (!IsLocallyControlled() || Sequence <= LastLocalMeleeHitSequence || !RPGDemoAbilitySystemComponent) return;
+    LastLocalMeleeHitSequence = Sequence;
+    if (RPGDemoCombat::IsDebugEnabled())
+        UE_LOG(LogRPGDemoCombat, Log, TEXT("OwnerHitFeedback pawn=%s sequence=%u netMode=%d"), *GetName(), Sequence, GetNetMode());
+    FGameplayEventData Event;
+    Event.Instigator = this;
+    UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(this, RPGDemoGameplayTags::Player_Event_HitPause, Event);
 }
 
 void ARPGDemoHeroCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -114,7 +141,7 @@ void ARPGDemoHeroCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
     ULocalPlayer* LocalPlayer = PlayerController ? PlayerController->GetLocalPlayer() : nullptr;
     UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer
         ? ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer) : nullptr;
-    check(Subsystem);
+    if (!Subsystem) return;
     Subsystem->AddMappingContext(InputConfigDataAsset->DefaultMappingContext, 0);
     URPGDemoInputComponent* Input = CastChecked<URPGDemoInputComponent>(PlayerInputComponent);
     Input->BindNativeInputAction(InputConfigDataAsset, RPGDemoGameplayTags::InputTag_Move, ETriggerEvent::Triggered, this, &ThisClass::Input_Move);
@@ -129,6 +156,32 @@ void ARPGDemoHeroCharacter::BeginPlay()
 {
     Super::BeginPlay();
     InitializeAbilitySystemFromPlayerState();
+    if (GetNetMode() != NM_DedicatedServer)
+        GetWorldTimerManager().SetTimer(LocalPresentationTimer, this, &ThisClass::RefreshStoneInteraction, 0.1f, true);
+}
+
+void ARPGDemoHeroCharacter::RefreshStoneInteraction()
+{
+    if (!IsLocallyControlled()) return;
+    bool bAvailable = false;
+    if (RPGDemoAbilitySystemComponent && !RPGDemoAbilitySystemComponent->HasMatchingGameplayTag(RPGDemoGameplayTags::Shared_Status_Dead))
+    {
+        for (TActorIterator<ARPGDemoStoneBase> It(GetWorld()); It; ++It)
+        {
+            if (!It->IsConsumed() && FVector::DistSquared(GetActorLocation(), It->GetActorLocation()) <= FMath::Square(StonePickUpRequestRadius))
+            { bAvailable = true; break; }
+        }
+    }
+    bStoneInteractionAvailable = bAvailable;
+    // A newly constructed overlay also needs the current value even if it did not change.
+    HeroUIComponent->OnStoneInteracted.Broadcast(bAvailable);
+}
+
+void ARPGDemoHeroCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    GetWorldTimerManager().ClearTimer(LocalPresentationTimer);
+    HeroUIComponent->OnStoneInteracted.Broadcast(false);
+    Super::EndPlay(EndPlayReason);
 }
 
 void ARPGDemoHeroCharacter::Input_Move(const FInputActionValue& Value)
@@ -186,7 +239,7 @@ void ARPGDemoHeroCharacter::ServerTryConsumeNearbyStones_Implementation() { TryC
 
 void ARPGDemoHeroCharacter::TryConsumeNearbyStones()
 {
-    if (!HasAuthority() || !RPGDemoAbilitySystemComponent ||
+    if (!HasAuthority() || IsDeathPresentationActive() || !RPGDemoAbilitySystemComponent || RPGDemoAbilitySystemComponent->GetAvatarActor() != this ||
         RPGDemoAbilitySystemComponent->HasMatchingGameplayTag(RPGDemoGameplayTags::Shared_Status_Dead)) return;
     const float MaxDistanceSquared = FMath::Square(FMath::Max(StonePickUpRequestRadius, 0.f));
     for (TActorIterator<ARPGDemoStoneBase> It(GetWorld()); It; ++It)

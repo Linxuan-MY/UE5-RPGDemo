@@ -17,6 +17,10 @@
 /Build/**/FileOpenOrder/
 /AssetRegistryCache/
 /LocalBuilds/
+/StagedBuilds/
+/AutomationReports/
+/TestResults/
+/CodeCoverage/
 
 # Unreal generated project files
 *.sln
@@ -79,6 +83,16 @@
 __pycache__/
 *.py[cod]
 
+# Local Python test environments and caches
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
 # OS files
 .DS_Store
 Thumbs.db
@@ -99,4 +113,4 @@ Desktop.ini
 /Packages/
 /Packaged/
 /Releases/
-/Artifacts/
+/[Aa]rtifacts/

@@ -16,6 +16,8 @@ UCLASS()
 class RPGDEMO_API UHeroGameplayAbility_TargetLock : public URPGDemoHeroGameplayAbility
 {
 	GENERATED_BODY()
+public:
+    static bool IsValidLockTarget(const AActor* Actor);
 
 protected:
 	//~ Begin UGameplayAbility interface

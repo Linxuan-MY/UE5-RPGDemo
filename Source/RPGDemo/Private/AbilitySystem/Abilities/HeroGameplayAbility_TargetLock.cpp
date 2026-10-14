@@ -15,12 +15,23 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "Characters/RPGDemoEnemyCharacter.h"
+#include "AbilitySystemComponent.h"
+
+bool UHeroGameplayAbility_TargetLock::IsValidLockTarget(const AActor* Actor)
+{
+    const ARPGDemoEnemyCharacter* Enemy = Cast<ARPGDemoEnemyCharacter>(Actor);
+    const UAbilitySystemComponent* ASC = Enemy ? Enemy->GetAbilitySystemComponent() : nullptr;
+    return IsValid(Enemy) && !Enemy->IsActorBeingDestroyed() && !Enemy->IsDeathPresentationActive() &&
+        ASC && !ASC->HasMatchingGameplayTag(RPGDemoGameplayTags::Shared_Status_Dead);
+}
 
 void UHeroGameplayAbility_TargetLock::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 	const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo,
 	const FGameplayEventData* TriggerEventData)
 {
 	TryLockOnTarget();
+    if (!IsActive() || !IsValidLockTarget(LockedTarget)) return;
 	InitTargetLockMovement();
 	InitTargetLockMappingContext();
 
@@ -40,8 +51,7 @@ void UHeroGameplayAbility_TargetLock::EndAbility(const FGameplayAbilitySpecHandl
 
 void UHeroGameplayAbility_TargetLock::OnTargetLockTick(float DeltaTime)
 {
-	if (!LockedTarget ||
-		URPGDemoFunctionLibrary::NativeDoesActorHaveTag(LockedTarget, RPGDemoGameplayTags::Shared_Status_Dead) ||
+	if (!IsValidLockTarget(LockedTarget) || !GetHeroCharacterFromActorInfo() ||
 		URPGDemoFunctionLibrary::NativeDoesActorHaveTag(GetHeroCharacterFromActorInfo(), RPGDemoGameplayTags::Shared_Status_Dead)
 		)
 	{
@@ -50,6 +60,7 @@ void UHeroGameplayAbility_TargetLock::OnTargetLockTick(float DeltaTime)
 	}
 
 	SetTargetLockWidgetPosition();
+    if (!IsActive() || !IsLocallyControlled() || !GetHeroControllerFromActorInfo()) return;
 
 	const bool bShouldOverrideRotation =
 		!URPGDemoFunctionLibrary::NativeDoesActorHaveTag(GetHeroCharacterFromActorInfo(), RPGDemoGameplayTags::Player_Status_Avoid)
@@ -73,6 +84,7 @@ void UHeroGameplayAbility_TargetLock::OnTargetLockTick(float DeltaTime)
 
 void UHeroGameplayAbility_TargetLock::SwitchTarget(const FGameplayTag& InSwitchDirectionTag)
 {
+    if (!IsValidLockTarget(LockedTarget)) { CancelTargetLockAbility(); return; }
 	GetAvailableActorsToLock();
 
 	TArray<AActor*> ActorsOnLeft;
@@ -123,6 +135,7 @@ void UHeroGameplayAbility_TargetLock::TryLockOnTarget()
 void UHeroGameplayAbility_TargetLock::GetAvailableActorsToLock()
 {
 	AvailableActorsToLock.Empty();
+    if (!GetHeroCharacterFromActorInfo()) return;
 
 	TArray<FHitResult> BoxTraceHits;
 
@@ -144,7 +157,7 @@ void UHeroGameplayAbility_TargetLock::GetAvailableActorsToLock()
 	{
 		if (AActor* HitActor = Hit.GetActor())
 		{
-			if (HitActor != GetHeroCharacterFromActorInfo())
+			if (IsValidLockTarget(HitActor))
 			{
 				AvailableActorsToLock.AddUnique(HitActor);
 			}
@@ -161,7 +174,7 @@ AActor* UHeroGameplayAbility_TargetLock::GetNearestTargetFromAvailableActors(con
 void UHeroGameplayAbility_TargetLock::GetAvailableActorsAroundTarget(TArray<AActor*>& OutActorsOnLeft,
 	TArray<AActor*>& OutActorsOnRight)
 {
-	if (!LockedTarget || AvailableActorsToLock.IsEmpty())
+	if (!IsValidLockTarget(LockedTarget) || AvailableActorsToLock.IsEmpty())
 	{
 		CancelTargetLockAbility();
 		return;
@@ -172,7 +185,7 @@ void UHeroGameplayAbility_TargetLock::GetAvailableActorsAroundTarget(TArray<AAct
 
 	for (AActor* AvailableActor : AvailableActorsToLock)
 	{
-		if (!AvailableActor || AvailableActor == LockedTarget)
+		if (!IsValidLockTarget(AvailableActor) || AvailableActor == LockedTarget)
 		{
 			continue;
 		}
@@ -194,13 +207,13 @@ void UHeroGameplayAbility_TargetLock::GetAvailableActorsAroundTarget(TArray<AAct
 
 void UHeroGameplayAbility_TargetLock::DrawTargetLockWidget()
 {
+    if (!IsLocallyControlled() || !GetHeroControllerFromActorInfo() || !TargetLockWidgetClass) return;
 	if (!DrawnTargetLockWidget)
 	{
-		check(TargetLockWidgetClass);
 
 		DrawnTargetLockWidget = CreateWidget<URPGDemoWidgetBase>(GetHeroControllerFromActorInfo(), TargetLockWidgetClass);
 
-		check(DrawnTargetLockWidget);
+        if (!DrawnTargetLockWidget) return;
 
 		DrawnTargetLockWidget->AddToViewport();
 	}
@@ -208,7 +221,8 @@ void UHeroGameplayAbility_TargetLock::DrawTargetLockWidget()
 
 void UHeroGameplayAbility_TargetLock::SetTargetLockWidgetPosition()
 {
-	if (!DrawnTargetLockWidget || !LockedTarget)
+    if (!IsLocallyControlled() || !GetHeroControllerFromActorInfo()) return;
+	if (!DrawnTargetLockWidget || !IsValidLockTarget(LockedTarget))
 	{
 		CancelTargetLockAbility();
 		return;
@@ -249,11 +263,11 @@ void UHeroGameplayAbility_TargetLock::InitTargetLockMovement()
 
 void UHeroGameplayAbility_TargetLock::InitTargetLockMappingContext()
 {
+    if (!IsLocallyControlled() || !GetHeroControllerFromActorInfo() || !TargetLockMappingContext) return;
 	const ULocalPlayer* LocalPlayer = GetHeroControllerFromActorInfo()->GetLocalPlayer();
 
-	UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer);
-
-	check(Subsystem);
+	UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer ? ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer) : nullptr;
+    if (!Subsystem) return;
 
 	Subsystem->AddMappingContext(TargetLockMappingContext, 3);
 }
@@ -281,7 +295,7 @@ void UHeroGameplayAbility_TargetLock::CleanUp()
 
 void UHeroGameplayAbility_TargetLock::ResetTargetLockMovement()
 {
-	if (CachedDefaultMaxWalkSpeed > 0.f)
+	if (CachedDefaultMaxWalkSpeed > 0.f && GetHeroCharacterFromActorInfo())
 	{
 		GetHeroCharacterFromActorInfo()->GetCharacterMovement()->MaxWalkSpeed = CachedDefaultMaxWalkSpeed;
 	}
@@ -289,15 +303,14 @@ void UHeroGameplayAbility_TargetLock::ResetTargetLockMovement()
 
 void UHeroGameplayAbility_TargetLock::ResetTargetLockMappingContext()
 {
-	if (!GetHeroControllerFromActorInfo())
+	if (!IsLocallyControlled() || !GetHeroControllerFromActorInfo())
 	{
 		return;
 	}
 	const ULocalPlayer* LocalPlayer = GetHeroControllerFromActorInfo()->GetLocalPlayer();
 
-	UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer);
-
-	check(Subsystem);
+	UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer ? ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer) : nullptr;
+    if (!Subsystem || !TargetLockMappingContext) return;
 
 	Subsystem->RemoveMappingContext(TargetLockMappingContext);
 }

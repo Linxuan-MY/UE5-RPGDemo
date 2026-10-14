@@ -94,8 +94,7 @@ UPawnCombatComponent* URPGDemoFunctionLibrary::BP_GetPawnCombatComponentFromActo
 
 bool URPGDemoFunctionLibrary::TargetPawnHostile(APawn* QueryPawn, APawn* TargetPawn)
 {
-	check(QueryPawn);
-	check(TargetPawn);
+    if (!IsValid(QueryPawn) || !IsValid(TargetPawn)) return false;
 
 	IGenericTeamAgentInterface* QueryTeamAgent = Cast<IGenericTeamAgentInterface>(QueryPawn->GetController());
 	IGenericTeamAgentInterface* TargetTeamAgent = Cast<IGenericTeamAgentInterface>(TargetPawn->GetController());
@@ -168,8 +167,10 @@ bool URPGDemoFunctionLibrary::IsValidBlock(AActor* InAttacker, AActor* InVictim)
 bool URPGDemoFunctionLibrary::ApplyGameplayEffectSpecHandleToTargetActor(AActor* InInstigator, AActor* InTargetActor,
 	const FGameplayEffectSpecHandle& InSpecHandle)
 {
-	URPGDemoAbilitySystemComponent* SourceASC = NativeGetRPGDemoASCFromActor(InInstigator);
-	URPGDemoAbilitySystemComponent* TargetASC = NativeGetRPGDemoASCFromActor(InTargetActor);
+    if (!IsValid(InInstigator) || !InInstigator->HasAuthority() || !IsValid(InTargetActor) || !InSpecHandle.IsValid()) return false;
+    UAbilitySystemComponent* SourceASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(InInstigator);
+    UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(InTargetActor);
+    if (!IsValid(SourceASC) || !IsValid(TargetASC)) return false;
 
 	FActiveGameplayEffectHandle ActiveGameplayEffectHandle = SourceASC->ApplyGameplayEffectSpecToTarget(*InSpecHandle.Data, TargetASC);
 

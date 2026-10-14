@@ -7,10 +7,12 @@
 #include "RPGDemoGameplayTags.h"
 #include "Components/SphereComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "NiagaraComponent.h"
 
 bool ARPGDemoStoneBase::Consume(URPGDemoAbilitySystemComponent* AbilitySystemComponent, int32 ApplyLevel)
 {
-	if (!HasAuthority() || bConsumed || bConsumptionInProgress || !AbilitySystemComponent || !StoneGameplayEffectClass)
+	if (!HasAuthority() || bConsumed || bConsumptionInProgress || !AbilitySystemComponent || !StoneGameplayEffectClass ||
+        AbilitySystemComponent->HasMatchingGameplayTag(RPGDemoGameplayTags::Shared_Status_Dead))
 	{
 		return false;
 	}
@@ -34,14 +36,17 @@ bool ARPGDemoStoneBase::Consume(URPGDemoAbilitySystemComponent* AbilitySystemCom
 	}
 
 	bConsumed = true;
-	PickUpCollisionSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    OnRep_Consumed();
 	ForceNetUpdate();
 	MulticastOnStoneConsumed();
+    SetLifeSpan(1.f);
 	return true;
 }
 
 void ARPGDemoStoneBase::MulticastOnStoneConsumed_Implementation()
 {
+    bConsumed = true;
+    OnRep_Consumed();
 	if (bLocalConsumptionPresented)
 	{
 		return;
@@ -51,6 +56,15 @@ void ARPGDemoStoneBase::MulticastOnStoneConsumed_Implementation()
 	{
 		BP_OnStoneConsumed();
 	}
+}
+
+void ARPGDemoStoneBase::OnRep_Consumed()
+{
+    if (!bConsumed) return;
+    SetActorHiddenInGame(true);
+    SetActorEnableCollision(false);
+    TInlineComponentArray<UNiagaraComponent*> Effects(this);
+    for (UNiagaraComponent* Effect : Effects) Effect->DeactivateImmediate();
 }
 
 void ARPGDemoStoneBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -63,13 +77,5 @@ void ARPGDemoStoneBase::OnPickUpCollisionSphereBeginOverlap(UPrimitiveComponent*
                                                             AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep,
                                                             const FHitResult& SweepResult)
 {
-	if (!HasAuthority())
-	{
-		return;
-	}
-
-	if (ARPGDemoHeroCharacter* OverlappedHeroCharacter = Cast<ARPGDemoHeroCharacter>(OtherActor))
-	{
-		OverlappedHeroCharacter->GetRPGDemoAbilitySystemComponent()->TryActivateAbilityByTag(RPGDemoGameplayTags::Player_Ability_PickUp_Stones);
-	}
+    // Owning clients present the range prompt; F uses the validated server RPC.
 }

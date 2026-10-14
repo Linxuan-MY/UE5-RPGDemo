@@ -6,7 +6,7 @@
 
 void UEnemyUIComponent::RegisterEnemyDrawnWidget(URPGDemoWidgetBase* InWidgetToRegister)
 {
-	EnemyDrawnWidgets.Add(InWidgetToRegister);
+	if (IsValid(InWidgetToRegister)) EnemyDrawnWidgets.AddUnique(InWidgetToRegister);
 }
 
 void UEnemyUIComponent::RemoveEnemyDrawnWidgetsIfAny()

@@ -24,9 +24,13 @@ public:
 	//~Begin IGenericTeamAgentInterface Interface
 	virtual ETeamAttitude::Type GetTeamAttitudeTowards(const AActor& Other) const override;
 	//~End IGenericTeamAgentInterface Interface
+	void StopTargetSelection();
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void OnPossess(APawn* InPawn) override;
+	virtual void OnUnPossess() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	UAIPerceptionComponent* EnemyPerceptionComponent;
@@ -40,6 +44,8 @@ protected:
 	AActor* FindNearestPerceivedHostile(const AActor* ExcludedActor = nullptr) const;
 	void SetTargetActor(UBlackboardComponent& BlackboardComponent, AActor* NewTarget, const TCHAR* SwitchReason);
 	bool IsTargetSwitchLocked() const;
+	bool IsLiveHostile(AActor* Actor) const;
+	void RefreshTargetSelection();
 
 private:
 	UPROPERTY(EditDefaultsOnly, Category = "Detour Crowd Avoidance Config")
@@ -61,4 +67,5 @@ private:
 	float TargetSwitchMinDistanceAdvantage = 300.0f;
 
 	double TargetLockEndTime = 0.0;
+	FTimerHandle TargetSelectionTimer;
 };

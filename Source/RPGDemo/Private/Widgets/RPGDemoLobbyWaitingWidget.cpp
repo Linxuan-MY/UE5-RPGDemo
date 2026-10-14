@@ -44,6 +44,10 @@ void URPGDemoLobbyWaitingWidget::RefreshLobbyPresentation()
 {
 	const APlayerController* OwningController = GetOwningPlayer();
 	const ARPGDemoPlayerState* PlayerState = OwningController ? OwningController->GetPlayerState<ARPGDemoPlayerState>() : nullptr;
+	if (UWidget* StartGameButton = GetWidgetFromName(TEXT("StartGameButton")))
+	{
+		StartGameButton->SetIsEnabled(PlayerState && PlayerState->bIsLobbyHost);
+	}
 	if (OptionsButton)
 	{
 		OptionsButton->SetVisibility(PlayerState && PlayerState->bIsLobbyHost

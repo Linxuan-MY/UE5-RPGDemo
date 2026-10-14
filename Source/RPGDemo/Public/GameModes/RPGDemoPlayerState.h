@@ -30,6 +30,7 @@ class RPGDEMO_API ARPGDemoPlayerState : public APlayerState, public IAbilitySyst
 public:
     ARPGDemoPlayerState();
     virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+    virtual void OnRep_PlayerName() override;
 
     UFUNCTION(BlueprintPure, Category = "RPGDemo|AbilitySystem")
     URPGDemoAbilitySystemComponent* GetRPGDemoAbilitySystemComponent() const { return AbilitySystemComponent; }
@@ -55,6 +56,7 @@ public:
     void SetLobbyHost(bool bNewHost);
     void SetLifeState(ERPGDemoPlayerLifeState NewState, double NewRespawnEndServerTime = 0.0);
     bool TryMarkHeroStartUpDataGranted();
+    void ResetForNewMatch();
 
     uint32 ServerJoinOrder = 0;
 

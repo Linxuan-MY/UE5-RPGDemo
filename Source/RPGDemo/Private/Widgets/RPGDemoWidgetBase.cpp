@@ -8,6 +8,7 @@
 #include "AbilitySystemComponent.h"
 #include "AbilitySystem/RPGDemoAttributeSet.h"
 #include "Components/UI/HeroUIComponent.h"
+#include "Components/UI/EnemyUIComponent.h"
 
 TArray<TWeakObjectPtr<URPGDemoWidgetBase>> URPGDemoWidgetBase::MenuLayerStack;
 
@@ -23,10 +24,33 @@ void URPGDemoWidgetBase::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
 
-	if (IPawnUIInterface* PawnUIInterface = Cast<IPawnUIInterface>(GetOwningPlayerPawn()))
+	InitHeroCreatedWidget(GetOwningPlayerPawn());
+
+	if (bParticipateInMenuLayerStack)
+	{
+		PruneMenuLayerStack();
+
+		const ULocalPlayer* OwningLocalPlayer = GetOwningLocalPlayer();
+
+		for (const TWeakObjectPtr<URPGDemoWidgetBase>& ExistingWidget : MenuLayerStack)
+		{
+			if (ExistingWidget.IsValid() && ExistingWidget->GetOwningLocalPlayer() == OwningLocalPlayer)
+				ExistingWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		MenuLayerStack.AddUnique(this);
+		SetVisibility(ESlateVisibility::Visible);
+	}
+}
+
+void URPGDemoWidgetBase::InitHeroCreatedWidget(AActor* OwningHeroActor)
+{
+	if (IPawnUIInterface* PawnUIInterface = Cast<IPawnUIInterface>(OwningHeroActor))
 	{
 		if (UHeroUIComponent* HeroUIComponent = PawnUIInterface->GetHeroUIComponent())
 		{
+			if (BoundHeroUIComponent.Get() == HeroUIComponent) return;
+			UnbindHeroUI();
+			BoundHeroUIComponent = HeroUIComponent;
 			BP_OnOwningHeroUIComponentInitialized(HeroUIComponent);
 
 			// Replicated attributes may arrive before the overlay binds its delegates.
@@ -47,29 +71,26 @@ void URPGDemoWidgetBase::NativeOnInitialized()
 		}
 	}
 
-	if (bParticipateInMenuLayerStack)
-	{
-		PruneMenuLayerStack();
+}
 
-		const ULocalPlayer* OwningLocalPlayer = GetOwningLocalPlayer();
-
-		for (const TWeakObjectPtr<URPGDemoWidgetBase>& ExistingWidget : MenuLayerStack)
-		{
-			if (ExistingWidget.IsValid() &&
-				ExistingWidget->GetOwningLocalPlayer() == OwningLocalPlayer)
-			{
-				ExistingWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
-			}
-		}
-
-		MenuLayerStack.AddUnique(this);
-		SetVisibility(ESlateVisibility::Visible);
-	}
+void URPGDemoWidgetBase::UnbindHeroUI()
+{
+    if (UHeroUIComponent* UI = BoundHeroUIComponent.Get())
+    {
+        UI->OnCurrentHealthChanged.RemoveAll(this);
+        UI->OnCurrentRageChanged.RemoveAll(this);
+        UI->OnEquippedWeaponChanged.RemoveAll(this);
+        UI->OnAbilityIconSlotUpdated.RemoveAll(this);
+        UI->OnAbilityCooldownBegin.RemoveAll(this);
+        UI->OnStoneInteracted.RemoveAll(this);
+    }
+    BoundHeroUIComponent.Reset();
 }
 
 void URPGDemoWidgetBase::NativeConstruct()
 {
 	Super::NativeConstruct();
+	InitHeroCreatedWidget(GetOwningPlayerPawn());
 
 	if (bParticipateInMenuLayerStack)
 	{
@@ -87,6 +108,7 @@ void URPGDemoWidgetBase::NativeConstruct()
 
 void URPGDemoWidgetBase::NativeDestruct()
 {
+	UnbindHeroUI();
 	if (bParticipateInMenuLayerStack)
 	{
 		MenuLayerStack.Remove(this);
@@ -126,5 +148,9 @@ void URPGDemoWidgetBase::InitEnemyCreatedWidget(AActor* OwningEnemyActor)
 		checkf(EnemyUIComponent, TEXT("InitEnemyCreatedWidget was called with an actor that implements IPawnUIInterface but does not return a valid EnemyUIComponent. Actor: %s"), *OwningEnemyActor->GetActorNameOrLabel());
 
 		BP_OnOwningEnemyUIComponentInitialized(EnemyUIComponent);
+        if (const IAbilitySystemInterface* AbilityOwner = Cast<IAbilitySystemInterface>(OwningEnemyActor))
+            if (const UAbilitySystemComponent* ASC = AbilityOwner->GetAbilitySystemComponent())
+                if (const URPGDemoAttributeSet* Attr = ASC->GetSet<URPGDemoAttributeSet>())
+                    EnemyUIComponent->OnCurrentHealthChanged.Broadcast(Attr->GetMaxHealth() > 0.f ? Attr->GetCurrentHealth() / Attr->GetMaxHealth() : 0.f);
 	}
 }

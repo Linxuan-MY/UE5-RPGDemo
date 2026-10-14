@@ -6,6 +6,7 @@
 #include "AbilitySystem/RPGDemoAttributeSet.h"
 #include "Net/UnrealNetwork.h"
 #include "RPGDemoGameInstance.h"
+#include "RPGDemoGameplayTags.h"
 
 ARPGDemoPlayerState::ARPGDemoPlayerState()
 {
@@ -44,6 +45,32 @@ bool ARPGDemoPlayerState::TryMarkHeroStartUpDataGranted()
     if (!HasAuthority() || bHeroStartUpDataGranted) return false;
     bHeroStartUpDataGranted = true;
     return true;
+}
+
+void ARPGDemoPlayerState::ResetForNewMatch()
+{
+    if (!HasAuthority()) return;
+    AbilitySystemComponent->CancelAllAbilities();
+    AbilitySystemComponent->ClearAllAbilities();
+    AbilitySystemComponent->RemoveActiveEffects(FGameplayEffectQuery());
+    FGameplayTagContainer OwnedTags;
+    AbilitySystemComponent->GetOwnedGameplayTags(OwnedTags);
+    for (const FGameplayTag& Tag : OwnedTags)
+    {
+        AbilitySystemComponent->SetLooseGameplayTagCount(Tag, 0, EGameplayTagReplicationState::None);
+        AbilitySystemComponent->SetLooseGameplayTagCount(Tag, 0, EGameplayTagReplicationState::TagAndCountToAll);
+    }
+    AbilitySystemComponent->SetLooseGameplayTagCount(RPGDemoGameplayTags::Shared_Status_Dead, 0, EGameplayTagReplicationState::TagAndCountToAll);
+    bHeroStartUpDataGranted = false;
+    SetIsOnlyASpectator(false);
+    SetIsSpectator(false);
+    SetLifeState(ERPGDemoPlayerLifeState::Alive);
+}
+
+void ARPGDemoPlayerState::OnRep_PlayerName()
+{
+    Super::OnRep_PlayerName();
+    if (URPGDemoGameInstance* GI = GetGameInstance<URPGDemoGameInstance>()) GI->RefreshLobbyWaitingPlayers();
 }
 
 void ARPGDemoPlayerState::OnRep_IsLobbyHost()

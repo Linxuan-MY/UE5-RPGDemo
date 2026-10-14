@@ -13,6 +13,17 @@ class URPGDemoAbilitySystemComponent;
 class URPGDemoAttributeSet;
 class UDataAsset_StartUpDataBase;
 class UMotionWarpingComponent;
+class UAnimMontage;
+
+USTRUCT()
+struct FRPGDemoCharacterDeathSnapshot
+{
+    GENERATED_BODY()
+    UPROPERTY() TObjectPtr<UAnimMontage> Montage;
+    UPROPERTY() double StartServerTime = 0.0;
+    UPROPERTY() float Duration = 0.f;
+    UPROPERTY() bool bStarted = false;
+};
 
 UCLASS()
 class RPGDEMO_API ARPGDemoBaseCharacter : public ACharacter, public IAbilitySystemInterface, public IPawnCombatInterface, public IPawnUIInterface
@@ -22,6 +33,12 @@ class RPGDEMO_API ARPGDemoBaseCharacter : public ACharacter, public IAbilitySyst
 public:
 	// Sets default values for this character's properties
 	ARPGDemoBaseCharacter();
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+    void BeginCharacterDeath();
+    bool IsDeathPresentationActive() const { return DeathSnapshot.bStarted; }
+    bool IsDeathPoseHeld() const { return bDeathPoseHeld; }
+    const FRPGDemoCharacterDeathSnapshot& GetDeathSnapshot() const { return DeathSnapshot; }
+    double GetPresentationServerTime() const;
 
 	//~ Begin IAbilitySystemInterface interface
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
@@ -37,6 +54,9 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+    virtual void OnDeathPoseHeld() {}
+    UPROPERTY(EditDefaultsOnly, Category = "CharacterData|Death") TArray<TObjectPtr<UAnimMontage>> DeathMontages;
 
 	//~ Begin APawn interface
 	virtual void PossessedBy(AController* NewController) override;
@@ -54,7 +74,14 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CharacterData")
 	TSoftObjectPtr<UDataAsset_StartUpDataBase> CharacterStartUpData;
-
+private:
+    UFUNCTION() void OnRep_DeathSnapshot();
+    void UpdateDeathPresentation();
+    UAnimMontage* SelectDeathMontage() const;
+    UPROPERTY(ReplicatedUsing = OnRep_DeathSnapshot) FRPGDemoCharacterDeathSnapshot DeathSnapshot;
+    FTimerHandle DeathPoseTimer;
+    bool bLocalDeathStarted = false;
+    bool bDeathPoseHeld = false;
 
 public:
 	FORCEINLINE URPGDemoAbilitySystemComponent* GetRPGDemoAbilitySystemComponent() const { return RPGDemoAbilitySystemComponent; }

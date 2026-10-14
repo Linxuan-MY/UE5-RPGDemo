@@ -35,6 +35,7 @@ $uatArguments = @(
     '-map=/Game/Maps/MainMenuMap+/Game/Maps/MultiplayerLobbyMap+/Game/Maps/SurvivalGameModeMap',
     "-archivedirectory=$archiveDirectory"
 )
+if ($Configuration -eq 'Shipping') { $uatArguments += '-nodebuginfo' }
 & $runUat @uatArguments
 if ($LASTEXITCODE -ne 0) { throw "BuildCookRun failed with exit code $LASTEXITCODE" }
 $after = & $snapshotTool -EngineRoot $EngineRoot

@@ -24,6 +24,10 @@ class RPGDEMO_API UHeroUIComponent : public UPawnUIComponent
 	GENERATED_BODY()
 
 public:
+	/** Replays current state after all HUD children have bound their delegates. */
+	UFUNCTION(BlueprintCallable, Category = "RPGDemo|UI")
+	void RefreshPresentation();
+
 	UPROPERTY(BlueprintAssignable)
 	FOnPercentChangedDelegate OnCurrentRageChanged;
 

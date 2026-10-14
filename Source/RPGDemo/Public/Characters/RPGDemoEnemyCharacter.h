@@ -12,6 +12,9 @@ class UWidgetComponent;
 class UBoxComponent;
 class UAnimMontage;
 class UNiagaraSystem;
+class UGameplayAbility;
+class UCurveFloat;
+class URPGDemoWidgetBase;
 struct FStreamableHandle;
 
 
@@ -32,6 +35,11 @@ struct FRPGDemoEnemyDeathPresentation
 
 	UPROPERTY()
 	bool bStarted = false;
+
+	UPROPERTY()
+	bool bDissolving = false;
+    UPROPERTY() double DissolveStartServerTime = 0.0;
+    UPROPERTY() float DissolveDuration = 2.f;
 };
 
 UCLASS()
@@ -47,6 +55,10 @@ public:
 	/** Resolves the granted death ability on the server and replicates one deterministic presentation. */
 	void BeginReplicatedDeathPresentation();
 
+	/** One terminal path for natural completion, cancellation and interruption. */
+	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Death")
+	void FinishEnemyDeathPresentation();
+
 	//~ Begin PawnCombatInterface interface
 	virtual UPawnCombatComponent* GetPawnCombatComponent() const override;
 	//~ End PawnCombatInterface interface
@@ -57,6 +69,12 @@ public:
 	//~ End PawnUIInterface interface
 
 protected:
+    UPROPERTY(EditDefaultsOnly, Category = "UI") TSubclassOf<URPGDemoWidgetBase> BossHealthWidgetClass;
+    UPROPERTY(EditDefaultsOnly, Category = "UI") FText BossDisplayName;
+    virtual void OnDeathPoseHeld() override;
+    UPROPERTY(EditDefaultsOnly, Category = "CharacterData|Death") TObjectPtr<UNiagaraSystem> DeathDissolveSystem;
+    UPROPERTY(EditDefaultsOnly, Category = "CharacterData|Death", meta = (ClampMin = "0.01")) float DeathDissolveDuration = 2.f;
+    UPROPERTY(EditDefaultsOnly, Category = "CharacterData|Death") TSubclassOf<UGameplayAbility> DeathDropAbility;
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
@@ -106,6 +124,13 @@ private:
 	void ApplyReplicatedDeathPresentation();
 	void BeginReplicatedDissolvePresentation();
 	void ResolveDeathPresentationAssets(UAnimMontage*& OutMontage, UNiagaraSystem*& OutDissolveSystem) const;
+    void UpdateDissolvePresentation();
+    void CompleteDeathCleanup();
+    void SpawnDeathDrop();
+    bool bDeathDropRequested = false;
+    FTimerHandle DeathCleanupTimer;
+    FTimerHandle DissolveUpdateTimer;
+    TWeakObjectPtr<UCurveFloat> DissolveCurve;
 
 	UFUNCTION()
 	void OnRep_DeathPresentation();

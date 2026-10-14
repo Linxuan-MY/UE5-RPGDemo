@@ -24,6 +24,7 @@ public:
 	void RemoveEnemyDrawnWidgetsIfAny();
 
 private:
-	TArray<URPGDemoWidgetBase*> EnemyDrawnWidgets;
+    UPROPERTY(Transient)
+	TArray<TObjectPtr<URPGDemoWidgetBase>> EnemyDrawnWidgets;
 
 };

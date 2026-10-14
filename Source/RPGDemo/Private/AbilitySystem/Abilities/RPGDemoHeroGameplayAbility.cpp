@@ -8,6 +8,8 @@
 #include "RPGDemoGameplayTags.h"
 #include "AbilitySystem/RPGDemoAttributeSet.h"
 #include "GameplayEffect.h"
+#include "AnimInstances/Hero/RPGDemoHeroAnimInstance.h"
+#include "Components/SkeletalMeshComponent.h"
 
 namespace
 {
@@ -54,7 +56,8 @@ void URPGDemoHeroGameplayAbility::ApplyCost(const FGameplayAbilitySpecHandle Han
 
 ARPGDemoHeroCharacter* URPGDemoHeroGameplayAbility::GetHeroCharacterFromActorInfo()
 {
-	if(!CachedRPGDemoHeroCharacter.IsValid())
+    if (!CurrentActorInfo) return nullptr;
+	if(!CachedRPGDemoHeroCharacter.IsValid() || CachedRPGDemoHeroCharacter.Get() != CurrentActorInfo->AvatarActor.Get())
 	{
 		CachedRPGDemoHeroCharacter = Cast<ARPGDemoHeroCharacter>(CurrentActorInfo->AvatarActor);
 	}
@@ -62,9 +65,18 @@ ARPGDemoHeroCharacter* URPGDemoHeroGameplayAbility::GetHeroCharacterFromActorInf
 	return CachedRPGDemoHeroCharacter.IsValid() ? CachedRPGDemoHeroCharacter.Get() : nullptr;
 }
 
+void URPGDemoHeroGameplayAbility::StartLocalHitPause(float Duration)
+{
+    ARPGDemoHeroCharacter* Hero = GetHeroCharacterFromActorInfo();
+    if (!Hero || !Hero->IsLocallyControlled()) return;
+    if (URPGDemoHeroAnimInstance* Anim = Cast<URPGDemoHeroAnimInstance>(Hero->GetMesh()->GetAnimInstance()))
+        Anim->BeginLocalHitStop(Duration);
+}
+
 ARPGDemoHeroController* URPGDemoHeroGameplayAbility::GetHeroControllerFromActorInfo()
 {
-	if(!CachedRPGDemoHeroController.IsValid())
+    if (!CurrentActorInfo) return nullptr;
+	if(!CachedRPGDemoHeroController.IsValid() || CachedRPGDemoHeroController.Get() != CurrentActorInfo->PlayerController.Get())
 	{
 		CachedRPGDemoHeroController = Cast<ARPGDemoHeroController>(CurrentActorInfo->PlayerController);
 	}
@@ -73,12 +85,14 @@ ARPGDemoHeroController* URPGDemoHeroGameplayAbility::GetHeroControllerFromActorI
 
 UHeroCombatComponent* URPGDemoHeroGameplayAbility::GetHeroCombatComponentFromActorInfo()
 {
-	return GetHeroCharacterFromActorInfo()->GetHeroCombatComponent();
+    ARPGDemoHeroCharacter* Hero = GetHeroCharacterFromActorInfo();
+	return Hero ? Hero->GetHeroCombatComponent() : nullptr;
 }
 
 UHeroUIComponent* URPGDemoHeroGameplayAbility::GetHeroUIComponentFromActorInfo()
 {
-	return GetHeroCharacterFromActorInfo()->GetHeroUIComponent();
+    ARPGDemoHeroCharacter* Hero = GetHeroCharacterFromActorInfo();
+	return Hero ? Hero->GetHeroUIComponent() : nullptr;
 }
 
 FGameplayEffectSpecHandle URPGDemoHeroGameplayAbility::MakeHeroDamageEffectSpecHandle(TSubclassOf<UGameplayEffect> EffectClass, float InWeaponBaseDamage, FGameplayTag InCurrentAttackTypeTag, int32 InUsedComboCount)

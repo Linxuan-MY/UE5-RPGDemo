@@ -8,6 +8,7 @@
 #include "Net/UnrealNetwork.h"
 
 #include "RPGDemoDebugHelper.h"
+#include "Combat/RPGDemoCombatLog.h"
 
 
 ARPGDemoWeaponBase::ARPGDemoWeaponBase()
@@ -31,7 +32,44 @@ ARPGDemoWeaponBase::ARPGDemoWeaponBase()
 void ARPGDemoWeaponBase::BeginPlay()
 {
 	Super::BeginPlay();
+    BindOwnerLifetime();
 	TryRegisterWithOwningPawn();
+}
+
+void ARPGDemoWeaponBase::SetOwner(AActor* NewOwner)
+{
+    if (AActor* Previous = LifetimeOwner.Get()) Previous->OnDestroyed.RemoveDynamic(this, &ThisClass::OnLifetimeOwnerDestroyed);
+    LifetimeOwner.Reset();
+    Super::SetOwner(NewOwner);
+    BindOwnerLifetime();
+}
+
+void ARPGDemoWeaponBase::BindOwnerLifetime()
+{
+    if (HasAuthority() && GetOwner())
+    {
+        LifetimeOwner = GetOwner();
+        GetOwner()->OnDestroyed.AddUniqueDynamic(this, &ThisClass::OnLifetimeOwnerDestroyed);
+    }
+}
+
+void ARPGDemoWeaponBase::OnLifetimeOwnerDestroyed(AActor* DestroyedOwner)
+{
+    if (!HasAuthority()) return;
+    OnWeaponHitTarget.Unbind();
+    OnWeaponPulledFromTarget.Unbind();
+    WeaponCollisionBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    Destroy();
+}
+
+void ARPGDemoWeaponBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    if (AActor* Previous = LifetimeOwner.Get()) Previous->OnDestroyed.RemoveDynamic(this, &ThisClass::OnLifetimeOwnerDestroyed);
+    if (APawn* Pawn = Cast<APawn>(GetOwner()))
+        if (UPawnCombatComponent* Combat = Pawn->FindComponentByClass<UPawnCombatComponent>()) Combat->UnregisterWeapon(this);
+    OnWeaponHitTarget.Unbind();
+    OnWeaponPulledFromTarget.Unbind();
+    Super::EndPlay(EndPlayReason);
 }
 
 void ARPGDemoWeaponBase::OnRep_Owner()
@@ -87,12 +125,14 @@ void ARPGDemoWeaponBase::OnCollisionBoxBeginOverlap(UPrimitiveComponent* Overlap
 
 	APawn* WeaponOwningPawn = GetInstigator<APawn>();
 
-	checkf(WeaponOwningPawn, TEXT("Weapon %s does not have a valid instigator pawn!"), *GetName());
+    if (!IsValid(WeaponOwningPawn)) return;
 
 	if (APawn* HitPawn = Cast<APawn>(OtherActor))
 	{
 		if (URPGDemoFunctionLibrary::TargetPawnHostile(WeaponOwningPawn, HitPawn))
 		{
+            if (RPGDemoCombat::IsDebugEnabled())
+                UE_LOG(LogRPGDemoCombat, Log, TEXT("WeaponOverlap pawn=%s target=%s box=%s"), *WeaponOwningPawn->GetName(), *HitPawn->GetName(), *WeaponCollisionBox->GetComponentLocation().ToString());
 			OnWeaponHitTarget.ExecuteIfBound(OtherActor);
 		}
 	}
@@ -107,7 +147,7 @@ void ARPGDemoWeaponBase::OnCollisionBoxEndOverlap(UPrimitiveComponent* Overlappe
 
 	APawn* WeaponOwningPawn = GetInstigator<APawn>();
 
-	checkf(WeaponOwningPawn, TEXT("Weapon %s does not have a valid instigator pawn!"), *GetName());
+    if (!IsValid(WeaponOwningPawn)) return;
 
 	if (APawn* HitPawn = Cast<APawn>(OtherActor))
 	{

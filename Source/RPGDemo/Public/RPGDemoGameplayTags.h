@@ -83,6 +83,7 @@ namespace RPGDemoGameplayTags
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Enemy_Status_Unblockable);
 
 	/** Shared Tags **/
+    RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_FX_HitFlash);
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Ability_HitReact);
 	RPGDEMO_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Shared_Ability_Death);
 

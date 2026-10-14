@@ -40,15 +40,21 @@ void UBTService_OrientToTargetActor::TickNode(UBehaviorTreeComponent& OwnerComp,
 {
 	Super::TickNode(OwnerComp, NodeMemory, DeltaSeconds);
 
+	if (!OwnerComp.GetBlackboardComponent() || !OwnerComp.GetAIOwner()) return;
 	UObject* ActorObject = OwnerComp.GetBlackboardComponent()->GetValueAsObject(InTargetActorKey.SelectedKeyName);
 	AActor* TargetActor = Cast<AActor>(ActorObject);
 
 	APawn* OwningPawn = OwnerComp.GetAIOwner()->GetPawn();
 
-	if (OwningPawn && TargetActor)
+	if (IsValid(OwningPawn) && IsValid(TargetActor))
 	{
-		const FRotator LookAtRot = UKismetMathLibrary::FindLookAtRotation(OwningPawn->GetActorLocation(), TargetActor->GetActorLocation());
-		const FRotator TargetRot = FMath::RInterpTo(OwningPawn->GetActorRotation(), LookAtRot, DeltaSeconds, RotationInterpSpeed);
+		const FVector Direction = TargetActor->GetActorLocation() - OwningPawn->GetActorLocation();
+		if (Direction.IsNearlyZero()) return;
+		// Use the same upright yaw contract as RotateToFaceTarget. This service
+		// runs during attacks too, so pitch must not tilt socket damage boxes.
+		const FRotator LookAtRot(0.f, Direction.Rotation().Yaw, 0.f);
+		const FRotator CurrentRot(0.f, OwningPawn->GetActorRotation().Yaw, 0.f);
+		const FRotator TargetRot = FMath::RInterpTo(CurrentRot, LookAtRot, DeltaSeconds, RotationInterpSpeed);
 
 		OwningPawn->SetActorRotation(TargetRot);
 	}

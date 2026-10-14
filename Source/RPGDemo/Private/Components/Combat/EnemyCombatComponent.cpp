@@ -7,6 +7,7 @@
 #include "RPGDemoFunctionLibrary.h"
 #include "Characters/RPGDemoEnemyCharacter.h"
 #include "Components/BoxComponent.h"
+#include "Combat/RPGDemoCombatLog.h"
 
 #include "RPGDemoDebugHelper.h"
 
@@ -28,6 +29,9 @@ void UEnemyCombatComponent::OnHitTargetActor(AActor* HitActor)
 	{
 		bIsValidBlock = URPGDemoFunctionLibrary::IsValidBlock(GetOwningPawn(), HitActor);
 	}
+    if (RPGDemoCombat::IsDebugEnabled())
+        UE_LOG(LogRPGDemoCombat, Log, TEXT("EnemyMeleeContact source=%s target=%s blocked=%d unblockable=%d"),
+            *GetNameSafe(GetOwningPawn()), *GetNameSafe(HitActor), bIsValidBlock, bIsMyAttackUnblockable);
 
 	FGameplayEventData EventData;
 	EventData.Instigator = GetOwningPawn();

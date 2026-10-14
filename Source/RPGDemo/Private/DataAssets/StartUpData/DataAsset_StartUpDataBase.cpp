@@ -20,14 +20,26 @@ void UDataAsset_StartUpDataBase::GiveToAbilitySystemComponent(URPGDemoAbilitySys
 }
 
 void UDataAsset_StartUpDataBase::GrantAbilities(
-    const TArray<TSubclassOf<URPGDemoGameplayAbility>>& Abilities, URPGDemoAbilitySystemComponent* ASC, int32 ApplyLevel)
+    const TArray<TSubclassOf<URPGDemoGameplayAbility>>& Abilities, URPGDemoAbilitySystemComponent* ASC, int32 ApplyLevel, UObject* SourceObject)
 {
     for (const TSubclassOf<URPGDemoGameplayAbility>& Ability : Abilities)
     {
-        if (!Ability || ASC->FindAbilitySpecFromClass(Ability)) continue;
+        if (!Ability) continue;
+        bool bAlreadyGranted = false;
+        for (const FGameplayAbilitySpec& Existing : ASC->GetActivatableAbilities())
+            if (Existing.Ability && Existing.Ability->GetClass() == Ability &&
+                Existing.SourceObject.Get() == (SourceObject ? SourceObject : ASC->GetOwnerActor()))
+            { bAlreadyGranted = true; break; }
+        if (bAlreadyGranted) continue;
         FGameplayAbilitySpec Spec(Ability);
-        Spec.SourceObject = ASC->GetOwnerActor();
+        Spec.SourceObject = SourceObject ? SourceObject : ASC->GetOwnerActor();
         Spec.Level = ApplyLevel;
         ASC->GiveAbility(Spec);
     }
+}
+
+void UDataAsset_StartUpDataBase::GiveAvatarAbilitiesToAbilitySystemComponent(URPGDemoAbilitySystemComponent* ASC, int32 ApplyLevel)
+{
+    if (ASC && ASC->GetOwner() && ASC->GetOwner()->HasAuthority())
+        GrantAbilities(AvatarStartUpAbilities, ASC, ApplyLevel, ASC->GetAvatarActor());
 }

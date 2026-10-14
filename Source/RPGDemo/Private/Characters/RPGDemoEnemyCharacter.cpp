@@ -3,6 +3,7 @@
 
 #include "Characters/RPGDemoEnemyCharacter.h"
 #include "AIController.h"
+#include "Controllers/RPGDemoAIController.h"
 #include "BrainComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
@@ -14,6 +15,7 @@
 #include "DataAssets/StartUpData/DataAsset_EnemyStartUpData.h"
 #include "Components/UI/EnemyUIComponent.h"
 #include "Components/WidgetComponent.h"
+#include "Components/TextBlock.h"
 #include "Widgets/RPGDemoWidgetBase.h"
 #include "Components/BoxComponent.h"
 #include "RPGDemoFunctionLibrary.h"
@@ -21,14 +23,25 @@
 #include "GameModes/RPGDemoBaseGameMode.h"
 #include "Abilities/GameplayAbility.h"
 #include "Animation/AnimMontage.h"
+#include "Animation/AnimInstance.h"
 #include "Components/CapsuleComponent.h"
 #include "NiagaraSystem.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Components/MeshComponent.h"
+#include "Components/TimelineComponent.h"
+#include "Curves/CurveFloat.h"
+#include "Items/Weapons/RPGDemoWeaponBase.h"
+#include "Items/PickUps/RPGDemoStoneBase.h"
+#include "NavigationSystem.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 #include "UObject/UnrealType.h"
 #include "UObject/StructOnScope.h"
 
 #include "RPGDemoDebugHelper.h"
+#include "Combat/RPGDemoCombatLog.h"
 
 ARPGDemoEnemyCharacter::ARPGDemoEnemyCharacter()
 {
@@ -87,8 +100,26 @@ UEnemyUIComponent* ARPGDemoEnemyCharacter::GetEnemyUIComponent() const
 void ARPGDemoEnemyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+    // The editor property hook does not run in a cooked server executable.
+    if (!LeftHandCollisionBoxAttachBoneName.IsNone())
+        LeftHandCollisionBox->AttachToComponent(GetMesh(), FAttachmentTransformRules::KeepRelativeTransform, LeftHandCollisionBoxAttachBoneName);
+    if (!RightHandCollisionBoxAttachBoneName.IsNone())
+        RightHandCollisionBox->AttachToComponent(GetMesh(), FAttachmentTransformRules::KeepRelativeTransform, RightHandCollisionBoxAttachBoneName);
 
-	if (URPGDemoWidgetBase* HealthWidget = Cast<URPGDemoWidgetBase>(EnemyHealthWidgetComponent->GetUserWidgetObject()))
+    if (GetNetMode() != NM_DedicatedServer && BossHealthWidgetClass && !IsDeathPresentationActive())
+    {
+        for (auto It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+            if (APlayerController* PC = It->Get(); PC && PC->IsLocalController())
+                if (URPGDemoWidgetBase* BossWidget = CreateWidget<URPGDemoWidgetBase>(PC, BossHealthWidgetClass))
+                {
+                    if (UTextBlock* NameText = Cast<UTextBlock>(BossWidget->GetWidgetFromName(TEXT("TextBlock_BossName")))) NameText->SetText(BossDisplayName);
+                    BossWidget->AddToPlayerScreen();
+                    BossWidget->InitEnemyCreatedWidget(this);
+                    EnemyUIComponent->RegisterEnemyDrawnWidget(BossWidget);
+                }
+    }
+	if (GetNetMode() != NM_DedicatedServer)
+    if (URPGDemoWidgetBase* HealthWidget = Cast<URPGDemoWidgetBase>(EnemyHealthWidgetComponent->GetUserWidgetObject()))
 	{
 		HealthWidget->InitEnemyCreatedWidget(this);
 	}
@@ -148,6 +179,8 @@ void ARPGDemoEnemyCharacter::OnBodyCollisionBoxBeginOverlap(UPrimitiveComponent*
 	{
 		if (URPGDemoFunctionLibrary::TargetPawnHostile(this, HitPawn))
 		{
+            if (RPGDemoCombat::IsDebugEnabled())
+                UE_LOG(LogRPGDemoCombat, Log, TEXT("BodyOverlap pawn=%s target=%s box=%s position=%s"), *GetName(), *HitPawn->GetName(), *OverlappedComponent->GetName(), *OverlappedComponent->GetComponentLocation().ToString());
 			EnemyCombatComponent->OnHitTargetActor(HitPawn);
 		}
 	}
@@ -161,158 +194,164 @@ void ARPGDemoEnemyCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
 
 void ARPGDemoEnemyCharacter::BeginReplicatedDeathPresentation()
 {
-	if (!HasAuthority() || bDeathPresentationRequested || ReplicatedDeathPresentation.bStarted)
-	{
-		return;
-	}
-
-	bDeathPresentationRequested = true;
-
-	// Adding the death tag immediately after this call activates the existing death
-	// ability synchronously. Resolve on the next tick so we replicate the montage that
-	// the server actually selected instead of performing a second random selection.
-	GetWorldTimerManager().SetTimerForNextTick(
-		FTimerDelegate::CreateWeakLambda(this, [this]() { FinalizeReplicatedDeathPresentation(); }));
+    if (!HasAuthority() || bDeathPresentationRequested) return;
+    bDeathPresentationRequested = true;
+    if (AAIController* AI = Cast<AAIController>(GetController()))
+    {
+        AI->StopMovement();
+        if (ARPGDemoAIController* RPGDemoAI = Cast<ARPGDemoAIController>(AI)) RPGDemoAI->StopTargetSelection();
+        if (AI->BrainComponent) AI->BrainComponent->StopLogic(TEXT("Enemy death"));
+    }
+    UAnimMontage* UnusedMontage = nullptr;
+    UNiagaraSystem* Dissolve = DeathDissolveSystem;
+    if (!Dissolve) ResolveDeathPresentationAssets(UnusedMontage, Dissolve);
+    ReplicatedDeathPresentation.DissolveSystem = Dissolve;
+    ReplicatedDeathPresentation.bStarted = true;
+    ReplicatedDeathPresentation.DissolveDuration = FMath::Max(DeathDissolveDuration, 0.01f);
+    EnemyHealthWidgetComponent->SetVisibility(false, true);
+    BeginCharacterDeath();
+    ReplicatedDeathPresentation.DeathMontage = GetDeathSnapshot().Montage;
+    ForceNetUpdate();
 }
 
-void ARPGDemoEnemyCharacter::FinalizeReplicatedDeathPresentation()
-{
-	if (!HasAuthority() || ReplicatedDeathPresentation.bStarted)
-	{
-		return;
-	}
-
-	UAnimMontage* SelectedMontage = nullptr;
-	UNiagaraSystem* DissolveSystem = nullptr;
-	ResolveDeathPresentationAssets(SelectedMontage, DissolveSystem);
-
-	ReplicatedDeathPresentation.DeathMontage = SelectedMontage;
-	ReplicatedDeathPresentation.DissolveSystem = DissolveSystem;
-	ReplicatedDeathPresentation.bStarted = true;
-	ForceNetUpdate();
-	ApplyReplicatedDeathPresentation();
-}
+void ARPGDemoEnemyCharacter::FinalizeReplicatedDeathPresentation() { BeginReplicatedDeathPresentation(); }
 
 void ARPGDemoEnemyCharacter::OnRep_DeathPresentation()
 {
-	ApplyReplicatedDeathPresentation();
+    ApplyReplicatedDeathPresentation();
 }
 
 void ARPGDemoEnemyCharacter::ApplyReplicatedDeathPresentation()
 {
-	if (!ReplicatedDeathPresentation.bStarted || bLocalDeathPresentationApplied)
-	{
-		return;
-	}
+    if (!ReplicatedDeathPresentation.bStarted) return;
+    bLocalDeathPresentationApplied = true;
+    EnemyHealthWidgetComponent->SetVisibility(false, true);
+    EnemyUIComponent->RemoveEnemyDrawnWidgetsIfAny();
+    if (IsDeathPoseHeld()) BeginReplicatedDissolvePresentation();
+}
 
-	bLocalDeathPresentationApplied = true;
+void ARPGDemoEnemyCharacter::FinishEnemyDeathPresentation()
+{
+    // Ability cancellation must not shorten the character's replicated death animation.
+    if (IsDeathPoseHeld()) BeginReplicatedDissolvePresentation();
+}
 
-	if (AAIController* AIController = Cast<AAIController>(GetController()))
-	{
-		AIController->StopMovement();
-		if (UBrainComponent* Brain = AIController->GetBrainComponent())
-		{
-			Brain->StopLogic(TEXT("Enemy death"));
-		}
-	}
-
-	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
-	{
-		Movement->StopMovementImmediately();
-		Movement->StopActiveMovement();
-		// MOVE_None also discards montage root motion. With collision disabled, use
-		// Flying to apply the death's full root transform without gravity or AI input.
-		Movement->SetMovementMode(MOVE_Flying);
-	}
-
-	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	LeftHandCollisionBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	RightHandCollisionBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	EnemyHealthWidgetComponent->SetVisibility(false, true);
-
-	float PresentationDuration = 0.f;
-	if (ReplicatedDeathPresentation.DeathMontage)
-	{
-		if (!HasAuthority())
-		{
-			PresentationDuration = PlayAnimMontage(ReplicatedDeathPresentation.DeathMontage);
-		}
-		else
-		{
-			PresentationDuration = ReplicatedDeathPresentation.DeathMontage->GetPlayLength();
-		}
-	}
-
-	if (PresentationDuration > 0.f)
-	{
-		GetWorldTimerManager().SetTimer(
-			DeathPresentationTimerHandle,
-			this,
-			&ThisClass::BeginReplicatedDissolvePresentation,
-			PresentationDuration,
-			false);
-	}
-	else
-	{
-		BeginReplicatedDissolvePresentation();
-	}
+void ARPGDemoEnemyCharacter::OnDeathPoseHeld()
+{
+    BeginReplicatedDissolvePresentation();
 }
 
 void ARPGDemoEnemyCharacter::BeginReplicatedDissolvePresentation()
 {
-	if (bLocalDissolvePresentationApplied)
-	{
-		return;
-	}
+    if (!IsDeathPoseHeld() || bLocalDissolvePresentationApplied) return;
+    bLocalDissolvePresentationApplied = true;
+    TInlineComponentArray<UTimelineComponent*> Timelines(this);
+    for (UTimelineComponent* Timeline : Timelines)
+        if (Timeline->GetName().Contains(TEXT("DissolveTimeline")))
+        {
+            TSet<UCurveBase*> Curves;
+            Timeline->GetAllCurves(Curves);
+            for (UCurveBase* Curve : Curves) if (UCurveFloat* FloatCurve = Cast<UCurveFloat>(Curve)) { DissolveCurve = FloatCurve; break; }
+        }
+    bLocalDeathPresentationApplied = true;
+    if (HasAuthority())
+    {
+        ReplicatedDeathPresentation.bDissolving = true;
+        ReplicatedDeathPresentation.DissolveStartServerTime = GetDeathSnapshot().StartServerTime + GetDeathSnapshot().Duration;
+        ForceNetUpdate();
+        const float Remaining = FMath::Max(0.01f, static_cast<float>(
+            ReplicatedDeathPresentation.DissolveStartServerTime + ReplicatedDeathPresentation.DissolveDuration + 0.5 - GetPresentationServerTime()));
+        GetWorldTimerManager().SetTimer(DeathCleanupTimer, this, &ThisClass::CompleteDeathCleanup, Remaining, false);
+    }
+    EnemyHealthWidgetComponent->SetVisibility(false, true);
+    if (GetNetMode() != NM_DedicatedServer)
+    {
+        EnemyUIComponent->RemoveEnemyDrawnWidgetsIfAny();
+        for (int32 Index = 0; Index < GetMesh()->GetNumMaterials(); ++Index) GetMesh()->CreateDynamicMaterialInstance(Index);
+        if (UNiagaraSystem* System = ReplicatedDeathPresentation.DissolveSystem)
+        {
+            if (UNiagaraComponent* FX = UNiagaraFunctionLibrary::SpawnSystemAttached(System, GetMesh(), NAME_None,
+                FVector::ZeroVector, FRotator::ZeroRotator, EAttachLocation::KeepRelativeOffset, true))
+            {
+                if (UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(GetMesh()->GetMaterial(0)))
+                    FX->SetVariableLinearColor(TEXT("DissolveParticleColor"), Material->K2_GetVectorParameterValue(TEXT("DissolveEdgeColor")));
+            }
+        }
+    }
+    UpdateDissolvePresentation();
+    GetWorldTimerManager().SetTimer(DissolveUpdateTimer, this, &ThisClass::UpdateDissolvePresentation, 0.016f, true);
+}
 
-	bLocalDissolvePresentationApplied = true;
+void ARPGDemoEnemyCharacter::UpdateDissolvePresentation()
+{
+    if (GetNetMode() == NM_DedicatedServer) { GetWorldTimerManager().ClearTimer(DissolveUpdateTimer); return; }
+    const double Start = ReplicatedDeathPresentation.DissolveStartServerTime > 0.0
+        ? ReplicatedDeathPresentation.DissolveStartServerTime : GetDeathSnapshot().StartServerTime + GetDeathSnapshot().Duration;
+    const float Progress = FMath::Clamp(static_cast<float>((GetPresentationServerTime() - Start) /
+        FMath::Max(ReplicatedDeathPresentation.DissolveDuration, 0.01f)), 0.f, 1.f);
+    const float Amount = DissolveCurve.IsValid() ? DissolveCurve->GetFloatValue(Progress) : Progress;
+    GetMesh()->SetScalarParameterValueOnMaterials(TEXT("DissolveAmount"), Amount);
+    if (ARPGDemoWeaponBase* Weapon = EnemyCombatComponent->GetCharacterCurrentlyEquippedWeapon())
+    {
+        TInlineComponentArray<UMeshComponent*> Meshes(Weapon);
+        for (UMeshComponent* WeaponMesh : Meshes) WeaponMesh->SetScalarParameterValueOnMaterials(TEXT("DissolveAmount"), Amount);
+    }
+    if (Progress >= 1.f) GetWorldTimerManager().ClearTimer(DissolveUpdateTimer);
+}
 
-	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
-	{
-		Movement->StopMovementImmediately();
-		Movement->DisableMovement();
-	}
+void ARPGDemoEnemyCharacter::CompleteDeathCleanup()
+{
+    if (!HasAuthority() || IsActorBeingDestroyed()) return;
+    SpawnDeathDrop();
+    if (ARPGDemoWeaponBase* Weapon = EnemyCombatComponent->GetCharacterCurrentlyEquippedWeapon()) Weapon->Destroy();
+    Destroy();
+}
 
-	// The authority already executes the existing ability OnEnd path. Simulated proxies
-	// need this explicit bridge because they do not own the AI's ability spec.
-	if (HasAuthority())
-	{
-		return;
-	}
+void ARPGDemoEnemyCharacter::SpawnDeathDrop()
+{
+    if (!HasAuthority() || bDeathDropRequested || !GetWorld()) return;
+    bDeathDropRequested = true;
+    // Preserve the existing ability's scalable probability and granted difficulty level.
+    const UGameplayAbility* DropDefaults = DeathDropAbility ? DeathDropAbility->GetDefaultObject<UGameplayAbility>() : nullptr;
+    int32 Level = 1;
+    if (RPGDemoAbilitySystemComponent)
+        for (const FGameplayAbilitySpec& Spec : RPGDemoAbilitySystemComponent->GetActivatableAbilities())
+            if (Spec.Ability && Spec.Ability->GetAssetTags().HasTagExact(RPGDemoGameplayTags::Enemy_Ability_SpawnStone))
+            { DropDefaults = Spec.Ability; Level = Spec.Level; break; }
+    const FStructProperty* ChanceProperty = DropDefaults
+        ? FindFProperty<FStructProperty>(DropDefaults->GetClass(), TEXT("StoneSpawnChanceScalableFloat")) : nullptr;
+    if (!ChanceProperty || ChanceProperty->Struct != FScalableFloat::StaticStruct()) return;
+    const auto* Chance = ChanceProperty->ContainerPtrToValuePtr<FScalableFloat>(DropDefaults);
+    const bool bHealing = FMath::FRand() < 0.5f;
+    if (FMath::FRand() >= FMath::Clamp(Chance->GetValueAtLevel(Level), 0.f, 1.f)) return;
 
-	// Preserve the existing Blueprint material timeline and Niagara setup, but invoke it
-	// from replicated state so simulated proxies do not need an owning ability spec.
-	if (UFunction* EnemyDiedFunction = FindFunction(TEXT("OnEnemyDied")))
-	{
-		FProperty* Parameter = FindFProperty<FProperty>(EnemyDiedFunction, TEXT("DissolveNiagaraSystem"));
-		if (!Parameter || !Parameter->HasAnyPropertyFlags(CPF_Parm) ||
-			Parameter->HasAnyPropertyFlags(CPF_ReturnParm) || Parameter->ArrayDim != 1)
-		{
-			UE_LOG(LogTemp, Error, TEXT("Invalid OnEnemyDied parameter signature on %s"), *GetClass()->GetPathName());
-			return;
-		}
-
-		// Blueprint uses a soft object reference, whose layout is larger than a UObject*.
-		// Allocate and initialize the actual reflected function frame; never guess its layout.
-		FStructOnScope Parameters(EnemyDiedFunction);
-		if (FSoftObjectProperty* SoftParameter = CastField<FSoftObjectProperty>(Parameter))
-		{
-			SoftParameter->SetPropertyValue_InContainer(Parameters.GetStructMemory(),
-				FSoftObjectPtr(ReplicatedDeathPresentation.DissolveSystem.Get()));
-		}
-		else if (FObjectProperty* ObjectParameter = CastField<FObjectProperty>(Parameter))
-		{
-			ObjectParameter->SetObjectPropertyValue_InContainer(Parameters.GetStructMemory(),
-				ReplicatedDeathPresentation.DissolveSystem.Get());
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("Unsupported OnEnemyDied parameter type %s on %s"),
-				*Parameter->GetCPPType(), *GetClass()->GetPathName());
-			return;
-		}
-		ProcessEvent(EnemyDiedFunction, Parameters.GetStructMemory());
-	}
+    UWorld* World = GetWorld();
+    FVector Location = GetActorLocation() - FVector(0, 0, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+    FHitResult Ground;
+    FCollisionQueryParams Query(SCENE_QUERY_STAT(DeathDrop), false, this);
+    if (World->LineTraceSingleByObjectType(Ground, GetActorLocation(), GetActorLocation() - FVector(0, 0, 200),
+        FCollisionObjectQueryParams(ECollisionChannel::ECC_WorldStatic), Query)) Location = Ground.ImpactPoint;
+    if (UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
+    {
+        FNavLocation Random;
+        if (Nav->GetRandomPointInNavigableRadius(Location, 200.f, Random)) Location = Random.Location;
+    }
+    const FTransform SpawnTransform(FRotator(0, FMath::FRandRange(0.f, 360.f), 0), Location);
+    const FSoftClassPath StonePath(bHealing ? TEXT("/Game/Items/Stones/BP_HealingStone.BP_HealingStone_C")
+        : TEXT("/Game/Items/Stones/BP_RageStone.BP_RageStone_C"));
+    // The world owns completion, so destroying the corpse/ASC cannot cancel a cold asset load.
+    UAssetManager::GetStreamableManager().RequestAsyncLoad(StonePath,
+        FStreamableDelegate::CreateWeakLambda(World, [World, StonePath, SpawnTransform]()
+        {
+            if (World->bIsTearingDown || World->GetNetMode() == NM_Client) return;
+            UClass* StoneClass = StonePath.ResolveClass();
+            if (!StoneClass || !StoneClass->IsChildOf(ARPGDemoStoneBase::StaticClass()))
+            { UE_LOG(LogRPGDemoCombat, Error, TEXT("Death drop class failed to load: %s"), *StonePath.ToString()); return; }
+            FActorSpawnParameters Params;
+            Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+            if (!World->SpawnActor<ARPGDemoStoneBase>(StoneClass, SpawnTransform, Params))
+                UE_LOG(LogRPGDemoCombat, Error, TEXT("Death drop failed to spawn: %s"), *StonePath.ToString());
+        }));
 }
 
 void ARPGDemoEnemyCharacter::ResolveDeathPresentationAssets(
@@ -357,7 +396,8 @@ void ARPGDemoEnemyCharacter::ResolveDeathPresentationAssets(
 			}
 		}
 
-		if (!OutMontage && !CandidateMontages.IsEmpty())
+		// CurrentMontage may still be an attack when startup/death activation was interrupted.
+		if (!CandidateMontages.Contains(OutMontage) && !CandidateMontages.IsEmpty())
 		{
 			OutMontage = CandidateMontages[FMath::RandHelper(CandidateMontages.Num())];
 		}
@@ -386,7 +426,7 @@ void ARPGDemoEnemyCharacter::ResolveDeathPresentationAssets(
 }
 void ARPGDemoEnemyCharacter::InitEnemyStartUpData()
 {
-	if (!HasAuthority() || !GetWorld() || IsActorBeingDestroyed() || bEnemyStartUpDataInitialized || bEnemyStartUpDataLoading || CharacterStartUpData.IsNull())
+	if (!HasAuthority() || !GetWorld() || IsActorBeingDestroyed() || bDeathPresentationRequested || bEnemyStartUpDataInitialized || bEnemyStartUpDataLoading || CharacterStartUpData.IsNull())
 	{
 		return;
 	}
@@ -426,7 +466,7 @@ void ARPGDemoEnemyCharacter::InitEnemyStartUpData()
 			[this, AbilityApplyLevel]()
 			{
 				bEnemyStartUpDataLoading = false;
-				if (!HasAuthority() || IsActorBeingDestroyed() || !GetWorld() ||
+				if (!HasAuthority() || IsActorBeingDestroyed() || bDeathPresentationRequested || !GetWorld() ||
 					GetWorld()->bIsTearingDown || !IsValid(RPGDemoAbilitySystemComponent) ||
 					RPGDemoAbilitySystemComponent->GetAvatarActor() != this)
 				{
@@ -445,6 +485,7 @@ void ARPGDemoEnemyCharacter::InitEnemyStartUpData()
 
 void ARPGDemoEnemyCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    EnemyUIComponent->RemoveEnemyDrawnWidgetsIfAny();
 	if (EnemyStartUpDataHandle.IsValid())
 	{
 		EnemyStartUpDataHandle->CancelHandle();
@@ -452,5 +493,7 @@ void ARPGDemoEnemyCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	bEnemyStartUpDataLoading = false;
 	GetWorldTimerManager().ClearTimer(DeathPresentationTimerHandle);
+    GetWorldTimerManager().ClearTimer(DeathCleanupTimer);
+    GetWorldTimerManager().ClearTimer(DissolveUpdateTimer);
 	Super::EndPlay(EndPlayReason);
 }

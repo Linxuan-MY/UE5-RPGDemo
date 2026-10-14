@@ -7,6 +7,8 @@
 #include "HeroCombatComponent.generated.h"
 
 class ARPGDemoHeroWeapon;
+class UInputMappingContext;
+class UAnimInstance;
 
 /**
  * 
@@ -28,6 +30,11 @@ public:
 
 	virtual void OnHitTargetActor(AActor* HitActor) override;
 	virtual void OnWeaponPulledFromTargetActor(AActor* InteractedActor) override;
-
-	
+    UFUNCTION(BlueprintCallable, Category = "RPGDemo|Combat") void EquipHeroWeapon(ARPGDemoHeroWeapon* Weapon, int32 AbilityLevel);
+    UFUNCTION(BlueprintCallable, Category = "RPGDemo|Combat") void UnequipHeroWeapon();
+    virtual void RefreshEquippedWeaponPresentation() override;
+private:
+    TWeakObjectPtr<ARPGDemoHeroWeapon> PresentedWeapon;
+    UPROPERTY(Transient) TObjectPtr<UInputMappingContext> AppliedWeaponMapping;
+    UPROPERTY(Transient) TSubclassOf<UAnimInstance> AppliedWeaponAnimLayer;
 };

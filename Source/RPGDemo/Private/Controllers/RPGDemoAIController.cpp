@@ -7,6 +7,10 @@
 #include "Perception/AISenseConfig_Sight.h"
 #include "Perception/AISense_Sight.h"
 #include "BehaviorTree/BlackboardComponent.h"
+#include "AbilitySystemBlueprintLibrary.h"
+#include "AbilitySystemComponent.h"
+#include "RPGDemoGameplayTags.h"
+#include "TimerManager.h"
 
 #include "RPGDemoDebugHelper.h"
 
@@ -85,8 +89,57 @@ void ARPGDemoAIController::BeginPlay()
 
 void ARPGDemoAIController::OnEnemyPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 {
+	// Evaluate the entire current sight set, rather than letting callback order
+	// decide which player wins. Sight loss observes the same lock as acquisition.
+	RefreshTargetSelection();
+}
+
+void ARPGDemoAIController::OnPossess(APawn* InPawn)
+{
+	Super::OnPossess(InPawn);
+	GetWorldTimerManager().SetTimer(TargetSelectionTimer, this, &ThisClass::RefreshTargetSelection, 0.2f, true);
+}
+
+void ARPGDemoAIController::OnUnPossess()
+{
+	StopTargetSelection();
+	Super::OnUnPossess();
+}
+
+void ARPGDemoAIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	GetWorldTimerManager().ClearTimer(TargetSelectionTimer);
+	Super::EndPlay(EndPlayReason);
+}
+
+void ARPGDemoAIController::StopTargetSelection()
+{
+	GetWorldTimerManager().ClearTimer(TargetSelectionTimer);
+	TargetLockEndTime = 0.0;
+	if (UBlackboardComponent* BlackboardComp = GetBlackboardComponent())
+		BlackboardComp->ClearValue(TEXT("TargetActor"));
+	ClearFocus(EAIFocusPriority::Gameplay);
+}
+
+bool ARPGDemoAIController::IsLiveHostile(AActor* Actor) const
+{
+	const APawn* TargetPawn = Cast<APawn>(Actor);
+	if (!IsValid(TargetPawn) || TargetPawn->IsActorBeingDestroyed() || !IsValid(TargetPawn->GetController()) ||
+		GetTeamAttitudeTowards(*TargetPawn) != ETeamAttitude::Hostile) return false;
+	const UAbilitySystemComponent* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(Actor);
+	return !ASC || !ASC->HasMatchingGameplayTag(RPGDemoGameplayTags::Shared_Status_Dead);
+}
+
+void ARPGDemoAIController::RefreshTargetSelection()
+{
 	UBlackboardComponent* BlackboardComponent = GetBlackboardComponent();
-	if (!BlackboardComponent || !Actor || !GetPawn())
+	const UAbilitySystemComponent* PawnASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(GetPawn());
+	if (!GetPawn() || (PawnASC && PawnASC->HasMatchingGameplayTag(RPGDemoGameplayTags::Shared_Status_Dead)))
+	{
+		StopTargetSelection();
+		return;
+	}
+	if (!BlackboardComponent || !EnemyPerceptionComponent)
 	{
 		return;
 	}
@@ -94,40 +147,28 @@ void ARPGDemoAIController::OnEnemyPerceptionUpdated(AActor* Actor, FAIStimulus S
 	static const FName TargetActorKey(TEXT("TargetActor"));
 	AActor* CurrentTarget = Cast<AActor>(BlackboardComponent->GetValueAsObject(TargetActorKey));
 
-	if (Stimulus.WasSuccessfullySensed())
+	AActor* Candidate = FindNearestPerceivedHostile();
+	if (!IsLiveHostile(CurrentTarget))
 	{
-		if (GetTeamAttitudeTowards(*Actor) != ETeamAttitude::Hostile || CurrentTarget == Actor)
-		{
-			return;
-		}
-
-		if (!IsValid(CurrentTarget))
-		{
-			SetTargetActor(*BlackboardComponent, Actor, TEXT("NoCurrentTarget"));
-			return;
-		}
-
-		if (IsTargetSwitchLocked())
-		{
-			return;
-		}
-
-		const float CurrentDistance = FVector::Dist(GetPawn()->GetActorLocation(), CurrentTarget->GetActorLocation());
-		const float CandidateDistance = FVector::Dist(GetPawn()->GetActorLocation(), Actor->GetActorLocation());
-		const bool bHasRelativeAdvantage = CandidateDistance <= CurrentDistance * TargetSwitchDistanceRatio;
-		const bool bHasAbsoluteAdvantage = CurrentDistance - CandidateDistance >= TargetSwitchMinDistanceAdvantage;
-		if (bHasRelativeAdvantage || bHasAbsoluteAdvantage)
-		{
-			SetTargetActor(*BlackboardComponent, Actor,
-				bHasRelativeAdvantage ? TEXT("RelativeDistanceAdvantage") : TEXT("AbsoluteDistanceAdvantage"));
-		}
+		SetTargetActor(*BlackboardComponent, Candidate, TEXT("NoLiveTarget"));
 		return;
 	}
+	if (IsTargetSwitchLocked()) return;
 
-	if (CurrentTarget == Actor)
+	TArray<AActor*> PerceivedActors;
+	EnemyPerceptionComponent->GetCurrentlyPerceivedActors(UAISense_Sight::StaticClass(), PerceivedActors);
+	if (!PerceivedActors.Contains(CurrentTarget))
 	{
-		SetTargetActor(*BlackboardComponent, FindNearestPerceivedHostile(Actor), TEXT("CurrentTargetLost"));
+		SetTargetActor(*BlackboardComponent, Candidate, TEXT("SightLostAfterLock"));
+		return;
 	}
+	if (!Candidate || Candidate == CurrentTarget) return;
+	const float CurrentDistance = GetPawn()->GetDistanceTo(CurrentTarget);
+	const float CandidateDistance = GetPawn()->GetDistanceTo(Candidate);
+	if (CandidateDistance < CurrentDistance &&
+		(CandidateDistance <= CurrentDistance * TargetSwitchDistanceRatio ||
+		 CurrentDistance - CandidateDistance >= TargetSwitchMinDistanceAdvantage))
+		SetTargetActor(*BlackboardComponent, Candidate, TEXT("DistanceAdvantageAfterLock"));
 }
 
 AActor* ARPGDemoAIController::FindNearestPerceivedHostile(const AActor* ExcludedActor) const
@@ -144,7 +185,7 @@ AActor* ARPGDemoAIController::FindNearestPerceivedHostile(const AActor* Excluded
 	float NearestDistanceSquared = TNumericLimits<float>::Max();
 	for (AActor* Candidate : PerceivedActors)
 	{
-		if (!IsValid(Candidate) || Candidate == ExcludedActor || GetTeamAttitudeTowards(*Candidate) != ETeamAttitude::Hostile)
+		if (!IsLiveHostile(Candidate) || Candidate == ExcludedActor)
 		{
 			continue;
 		}

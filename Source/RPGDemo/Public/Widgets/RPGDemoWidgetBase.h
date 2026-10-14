@@ -29,10 +29,14 @@ protected:
 	void BP_OnOwningEnemyUIComponentInitialized(UEnemyUIComponent* OwningEnemyUIComponent);
 
 public:
+	UFUNCTION(BlueprintCallable, Category = "RPGDemo|UI")
+	void InitHeroCreatedWidget(AActor* OwningHeroActor);
 	UFUNCTION(BlueprintCallable)
 	void InitEnemyCreatedWidget(AActor* OwningEnemyActor);
 
 private:
+	TWeakObjectPtr<UHeroUIComponent> BoundHeroUIComponent;
+	void UnbindHeroUI();
 	static TArray<TWeakObjectPtr<URPGDemoWidgetBase>> MenuLayerStack;
 	static void PruneMenuLayerStack();
 };

@@ -19,12 +19,14 @@ class RPGDEMO_API ARPGDemoWeaponBase : public AActor
 public:	
 	// Sets default values for this actor's properties
 	ARPGDemoWeaponBase();
+    virtual void SetOwner(AActor* NewOwner) override;
 
 	FOnTargetInteractedDelegate OnWeaponHitTarget;
 	FOnTargetInteractedDelegate OnWeaponPulledFromTarget;
 
 protected:
 	virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void OnRep_Owner() override;
 
 	UPROPERTY(ReplicatedUsing = OnRep_WeaponRegistrationData)
@@ -37,6 +39,9 @@ protected:
 	void OnRep_WeaponRegistrationData();
 
 	void TryRegisterWithOwningPawn();
+    void BindOwnerLifetime();
+    UFUNCTION() void OnLifetimeOwnerDestroyed(AActor* DestroyedOwner);
+    TWeakObjectPtr<AActor> LifetimeOwner;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapons")
 	UStaticMeshComponent* WeaponMesh;

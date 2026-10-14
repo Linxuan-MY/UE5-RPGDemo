@@ -20,6 +20,8 @@ class RPGDEMO_API URPGDemoHeroGameplayAbility : public URPGDemoGameplayAbility
 	GENERATED_BODY()
 
 public:
+    UFUNCTION(BlueprintCallable, Category = "RPGDemo|Ability")
+    void StartLocalHitPause(float Duration = 0.2f);
 	virtual void ApplyCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 		const FGameplayAbilityActivationInfo ActivationInfo) const override;
 

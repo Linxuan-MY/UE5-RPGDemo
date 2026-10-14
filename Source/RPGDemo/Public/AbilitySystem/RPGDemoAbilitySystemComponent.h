@@ -30,5 +30,6 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "RPGDemo|Ability")
 	bool TryActivateAbilityByTag(FGameplayTag AbilityTagToActivate);
-
+protected:
+    virtual void OnRep_ReplicatedAnimMontage() override;
 };

@@ -6,17 +6,51 @@
 #include "Components/BoxComponent.h"
 
 #include "RPGDemoDebugHelper.h"
+#include "Characters/RPGDemoEnemyCharacter.h"
+#include "Combat/RPGDemoCombatLog.h"
+#include "AbilitySystemBlueprintLibrary.h"
+#include "AbilitySystemComponent.h"
+#include "RPGDemoGameplayTags.h"
+#include "Engine/World.h"
+#include "Net/UnrealNetwork.h"
+
+UPawnCombatComponent::UPawnCombatComponent() { SetIsReplicatedByDefault(true); }
+void UPawnCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+    DOREPLIFETIME(UPawnCombatComponent, CurrentlyEquippedWeaponTag);
+}
+void UPawnCombatComponent::OnRep_EquippedWeapon() { RefreshEquippedWeaponPresentation(); }
+void UPawnCombatComponent::SetEquippedWeaponTag(FGameplayTag WeaponTag)
+{
+    CurrentlyEquippedWeaponTag = WeaponTag;
+    RefreshEquippedWeaponPresentation();
+    if (GetOwner() && GetOwner()->HasAuthority()) GetOwner()->ForceNetUpdate();
+}
 
 void UPawnCombatComponent::RegisterSpawnedWeapon(FGameplayTag InWeaponTagToRegister, ARPGDemoWeaponBase* InWeaponToRegister, bool bReigsterAsEquippedWeapon)
 {
-	check(InWeaponToRegister);
+    if (!IsValid(InWeaponToRegister) || !InWeaponTagToRegister.IsValid()) return;
 
 	if (ARPGDemoWeaponBase* ExistingWeapon = GetCharacterCarriedWeaponByTag(InWeaponTagToRegister))
 	{
 		if (IsValid(ExistingWeapon))
 		{
-			UE_LOG(LogTemp, Verbose, TEXT("Ignoring duplicate weapon registration for tag %s on %s."),
-				*InWeaponTagToRegister.ToString(), *GetNameSafe(GetOwningPawn()));
+            if (ExistingWeapon == InWeaponToRegister)
+            {
+                if (bReigsterAsEquippedWeapon) CurrentlyEquippedWeaponTag = InWeaponTagToRegister;
+                RefreshEquippedWeaponPresentation();
+                return;
+            }
+            // Repeated OnRep calls are harmless; a second spawned actor is not.
+            if (GetOwningPawn()->HasAuthority())
+            {
+                UE_LOG(LogRPGDemoCombat, Warning, TEXT("Destroying duplicate carried weapon %s on %s"),
+                    *InWeaponToRegister->GetName(), *GetNameSafe(GetOwningPawn()));
+                InWeaponToRegister->OnWeaponHitTarget.Unbind();
+                InWeaponToRegister->OnWeaponPulledFromTarget.Unbind();
+                InWeaponToRegister->Destroy();
+            }
 			return;
 		}
 
@@ -24,6 +58,9 @@ void UPawnCombatComponent::RegisterSpawnedWeapon(FGameplayTag InWeaponTagToRegis
 	}
 
 	CharacterCarriedWeaponMap.Emplace(InWeaponTagToRegister, InWeaponToRegister);
+    if (RPGDemoCombat::IsDebugEnabled())
+        UE_LOG(LogRPGDemoCombat, Log, TEXT("WeaponRegistered pawn=%s weapon=%s equipped=%d netMode=%d"),
+            *GetNameSafe(GetOwningPawn()), *InWeaponToRegister->GetName(), bReigsterAsEquippedWeapon, GetWorld()->GetNetMode());
 
 	if (GetOwningPawn()->HasAuthority())
 	{
@@ -41,17 +78,18 @@ void UPawnCombatComponent::RegisterSpawnedWeapon(FGameplayTag InWeaponTagToRegis
 	{
 		CurrentlyEquippedWeaponTag = InWeaponTagToRegister;
 	}
+    RefreshEquippedWeaponPresentation();
 }
 
 ARPGDemoWeaponBase* UPawnCombatComponent::GetCharacterCarriedWeaponByTag(FGameplayTag InWeaponTagToGet) const
 {
 	if(CharacterCarriedWeaponMap.Contains(InWeaponTagToGet))
 	{
-		ARPGDemoWeaponBase* const* FoundWeapon = CharacterCarriedWeaponMap.Find(InWeaponTagToGet);
+		const TWeakObjectPtr<ARPGDemoWeaponBase>* FoundWeapon = CharacterCarriedWeaponMap.Find(InWeaponTagToGet);
 
 		if (FoundWeapon)
 		{
-			return *FoundWeapon;
+			return FoundWeapon->Get();
 		}
 	}
 
@@ -78,6 +116,14 @@ void UPawnCombatComponent::ToggleWeaponCollision(bool bShouldEnable, EToggleDama
 	{
 		return;
 	}
+    const UAbilitySystemComponent* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(GetOwningPawn());
+    if (bShouldEnable && ASC && ASC->HasMatchingGameplayTag(RPGDemoGameplayTags::Shared_Status_Dead)) return;
+
+    if (RPGDemoCombat::IsDebugEnabled())
+    {
+        UE_LOG(LogRPGDemoCombat, Log, TEXT("CollisionWindow pawn=%s enabled=%d type=%d"),
+            *OwningPawn->GetName(), bShouldEnable, static_cast<int32>(ToggleDamageType));
+    }
 
 	if (ToggleDamageType == EToggleDamageType::CurrentEquippedWeapon)
 	{
@@ -123,4 +169,58 @@ void UPawnCombatComponent::ToggleCurrentEquippedWeaponCollision(bool bShouldEnab
 
 void UPawnCombatComponent::ToggleBodyCollision(bool bShouldEnable, EToggleDamageType ToggleDamageType)
 {
+}
+
+void UPawnCombatComponent::ResetDamageCollision()
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+    for (const auto& Pair : CharacterCarriedWeaponMap)
+    {
+        if (ARPGDemoWeaponBase* Weapon = Pair.Value.Get())
+            Weapon->GetWeaponCollisionBox()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    }
+    if (ARPGDemoEnemyCharacter* Enemy = Cast<ARPGDemoEnemyCharacter>(GetOwner()))
+    {
+        Enemy->GetLeftHandCollisionBox()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        Enemy->GetRightHandCollisionBox()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    }
+    OverlappedActors.Empty();
+}
+
+void UPawnCombatComponent::UnregisterWeapon(ARPGDemoWeaponBase* Weapon)
+{
+    for (auto It = CharacterCarriedWeaponMap.CreateIterator(); It; ++It)
+    {
+        if (!It.Value().IsValid() || It.Value().Get() == Weapon)
+        {
+            if (CurrentlyEquippedWeaponTag == It.Key()) CurrentlyEquippedWeaponTag = FGameplayTag();
+            It.RemoveCurrent();
+        }
+    }
+    RefreshEquippedWeaponPresentation();
+}
+
+void UPawnCombatComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    // Empty first: weapon EndPlay can unregister itself while we destroy it.
+    const auto Weapons = MoveTemp(CharacterCarriedWeaponMap);
+    CurrentlyEquippedWeaponTag = FGameplayTag();
+    RefreshEquippedWeaponPresentation();
+    OverlappedActors.Empty();
+    for (const auto& Pair : Weapons)
+    {
+        if (ARPGDemoWeaponBase* Weapon = Pair.Value.Get())
+        {
+            Weapon->OnWeaponHitTarget.Unbind();
+            Weapon->OnWeaponPulledFromTarget.Unbind();
+            if (GetOwner() && GetOwner()->HasAuthority())
+            {
+                Weapon->GetWeaponCollisionBox()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+                if (RPGDemoCombat::IsDebugEnabled())
+                    UE_LOG(LogRPGDemoCombat, Log, TEXT("DestroyCarriedWeapon pawn=%s weapon=%s"), *GetOwner()->GetName(), *Weapon->GetName());
+                Weapon->Destroy();
+            }
+        }
+    }
+    Super::EndPlay(EndPlayReason);
 }

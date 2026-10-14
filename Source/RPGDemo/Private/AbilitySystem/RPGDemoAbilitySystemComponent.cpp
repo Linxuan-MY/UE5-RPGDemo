@@ -4,10 +4,18 @@
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 #include "AbilitySystem/Abilities/RPGDemoHeroGameplayAbility.h"
 #include "RPGDemoGameplayTags.h"
+#include "Characters/RPGDemoBaseCharacter.h"
+
+void URPGDemoAbilitySystemComponent::OnRep_ReplicatedAnimMontage()
+{
+    const ARPGDemoBaseCharacter* Character = Cast<ARPGDemoBaseCharacter>(GetAvatarActor());
+    if (Character && Character->IsDeathPresentationActive()) return;
+    Super::OnRep_ReplicatedAnimMontage();
+}
 
 void URPGDemoAbilitySystemComponent::OnAbilityInputPressed(const FGameplayTag InInputTag)
 {
-	if(!InInputTag.IsValid()) return;
+	if(!InInputTag.IsValid() || HasMatchingGameplayTag(RPGDemoGameplayTags::Shared_Status_Dead)) return;
 
 	for (const FGameplayAbilitySpec& AbilitySpec : GetActivatableAbilities())
 	{
@@ -51,28 +59,29 @@ void URPGDemoAbilitySystemComponent::CancelInputHeldAbilities()
 
 void URPGDemoAbilitySystemComponent::GrantHeroWeaponAbilities(const TArray<FRPGDemoHeroAbilitySet>& InDefaultWeaponAbilities, const TArray<FRPGDemoHeroSpecialAbilitySet>& InSpecialWeaponAbilities, int32 ApplyLevel, TArray<FGameplayAbilitySpecHandle>& OutGrantedAbilitySpecHandles)
 {
-	if (!GetOwner() || !GetOwner()->HasAuthority() || InDefaultWeaponAbilities.IsEmpty()) return;
+	if (!GetOwner() || !GetOwner()->HasAuthority() || !GetAvatarActor()) return;
+    auto Grant = [this, ApplyLevel, &OutGrantedAbilitySpecHandles](const FRPGDemoHeroAbilitySet& AbilitySet)
+    {
+        if (!AbilitySet.IsValid()) return;
+        for (const FGameplayAbilitySpec& Existing : GetActivatableAbilities())
+            if (Existing.Ability && Existing.Ability->GetClass() == AbilitySet.AbilityToGrant &&
+                Existing.SourceObject.Get() == GetAvatarActor() && Existing.GetDynamicSpecSourceTags().HasTagExact(AbilitySet.InputTag))
+            { OutGrantedAbilitySpecHandles.AddUnique(Existing.Handle); return; }
+
+        FGameplayAbilitySpec Spec(AbilitySet.AbilityToGrant, ApplyLevel);
+        Spec.SourceObject = GetAvatarActor();
+        Spec.GetDynamicSpecSourceTags().AddTag(AbilitySet.InputTag);
+        OutGrantedAbilitySpecHandles.AddUnique(GiveAbility(Spec));
+    };
 
 	for(const FRPGDemoHeroAbilitySet& AbilitySet : InDefaultWeaponAbilities)
 	{
-		if (!AbilitySet.IsValid()) continue;
-		FGameplayAbilitySpec AbilitySpec(AbilitySet.AbilityToGrant);
-		AbilitySpec.SourceObject = GetAvatarActor();
-		AbilitySpec.Level = ApplyLevel;
-		AbilitySpec.GetDynamicSpecSourceTags().AddTag(AbilitySet.InputTag);
-
-		OutGrantedAbilitySpecHandles.AddUnique(GiveAbility(AbilitySpec));
+        Grant(AbilitySet);
 	}
 
 	for(const FRPGDemoHeroSpecialAbilitySet& AbilitySet : InSpecialWeaponAbilities)
 	{
-		if (!AbilitySet.IsValid()) continue;
-		FGameplayAbilitySpec AbilitySpec(AbilitySet.AbilityToGrant);
-		AbilitySpec.SourceObject = GetAvatarActor();
-		AbilitySpec.Level = ApplyLevel;
-		AbilitySpec.GetDynamicSpecSourceTags().AddTag(AbilitySet.InputTag);
-
-		OutGrantedAbilitySpecHandles.AddUnique(GiveAbility(AbilitySpec));
+        Grant(AbilitySet);
 	}
 }
 

@@ -22,6 +22,7 @@ public:
     URPGDemoAttributeSet();
     virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+    void SynchronizeRageStatus();
 
     UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_CurrentHealth, Category = "Health") FGameplayAttributeData CurrentHealth;
     ATTRIBUTE_ACCESSORS(URPGDemoAttributeSet, CurrentHealth)

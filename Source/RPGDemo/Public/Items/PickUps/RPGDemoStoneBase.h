@@ -42,6 +42,7 @@ private:
 	UFUNCTION(NetMulticast, Reliable)
 	void MulticastOnStoneConsumed();
 
-	UPROPERTY(Replicated)
+	UFUNCTION() void OnRep_Consumed();
+	UPROPERTY(ReplicatedUsing = OnRep_Consumed)
 	bool bConsumed = false;
 };
