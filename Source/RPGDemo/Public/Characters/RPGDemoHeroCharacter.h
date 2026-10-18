@@ -28,6 +28,7 @@ public:
     virtual UPawnUIComponent* GetPawnUIComponent() const override;
     virtual UHeroUIComponent* GetHeroUIComponent() const override;
     FORCEINLINE UHeroCombatComponent* GetHeroCombatComponent() const { return HeroCombatComponent; }
+    const UDataAsset_InputConfig* GetInputConfig() const { return InputConfigDataAsset; }
 
     UFUNCTION(BlueprintPure, Category = "RPGDemo|Movement")
     FVector GetNetworkMovementInputDirection() const;
@@ -40,11 +41,13 @@ protected:
     virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+    virtual void UnPossessed() override;
 
 private:
     void InitializeAbilitySystemFromPlayerState();
     void GrantPersistentHeroStartUpData();
     bool bAvatarStartUpDataGranted = false;
+    TWeakObjectPtr<class ARPGDemoHeroController> LocalInputController;
     FTimerHandle LocalPresentationTimer;
     bool bStoneInteractionAvailable = false;
     uint32 ConfirmedMeleeHitSequence = 0;

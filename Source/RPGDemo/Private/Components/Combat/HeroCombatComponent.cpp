@@ -9,8 +9,7 @@
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 #include "Components/UI/HeroUIComponent.h"
 #include "AnimInstances/Hero/RPGDemoHeroLinkedAnimLayer.h"
-#include "EnhancedInputSubsystems.h"
-#include "GameFramework/PlayerController.h"
+#include "Controllers/RPGDemoHeroController.h"
 
 #include "RPGDemoDebugHelper.h"
 
@@ -69,9 +68,9 @@ void UHeroCombatComponent::RefreshEquippedWeaponPresentation()
     ARPGDemoHeroCharacter* Hero = Cast<ARPGDemoHeroCharacter>(GetOwner());
     if (!Hero) return;
     ARPGDemoHeroWeapon* Weapon = GetHeroCurrentEquippedWeapon();
-    const bool bLocalMappingReady = !Hero->IsLocallyControlled() ||
-        AppliedWeaponMapping == (Weapon ? Weapon->HeroWeaponData.WeaponInputMappingContext : nullptr);
-    if (PresentedWeapon.Get() == Weapon && (!Weapon || AppliedWeaponAnimLayer) && bLocalMappingReady) return;
+    // Input readiness can change independently of animation/weapon replication.
+    if (ARPGDemoHeroController* PC = Hero->GetController<ARPGDemoHeroController>()) PC->SyncPawnInputContexts(Hero);
+    if (PresentedWeapon.Get() == Weapon && (!Weapon || AppliedWeaponAnimLayer)) return;
     if (UAnimInstance* Anim = Hero->GetMesh()->GetAnimInstance())
     {
         if (AppliedWeaponAnimLayer) Anim->UnlinkAnimClassLayers(AppliedWeaponAnimLayer);
@@ -80,15 +79,6 @@ void UHeroCombatComponent::RefreshEquippedWeaponPresentation()
     }
     if (Hero->IsLocallyControlled())
     {
-        APlayerController* PC = Cast<APlayerController>(Hero->GetController());
-        UEnhancedInputLocalPlayerSubsystem* Input = PC && PC->GetLocalPlayer()
-            ? ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()) : nullptr;
-        if (Input)
-        {
-            if (AppliedWeaponMapping) Input->RemoveMappingContext(AppliedWeaponMapping);
-            AppliedWeaponMapping = Weapon ? Weapon->HeroWeaponData.WeaponInputMappingContext : nullptr;
-            if (AppliedWeaponMapping) Input->AddMappingContext(AppliedWeaponMapping, 1);
-        }
         if (ARPGDemoHeroWeapon* Previous = PresentedWeapon.Get())
             for (const auto& Ability : Previous->HeroWeaponData.SpecialWeaponAbilities)
                 Hero->GetHeroUIComponent()->OnAbilityIconSlotUpdated.Broadcast(Ability.InputTag, nullptr);

@@ -4,6 +4,7 @@
 
 #include "Components/Widget.h"
 #include "GameFramework/PlayerController.h"
+#include "RPGDemoFunctionLibrary.h"
 
 void URPGDemoResultWidget::NativeConstruct()
 {
@@ -11,10 +12,7 @@ void URPGDemoResultWidget::NativeConstruct()
 
 	if (APlayerController* PlayerController = GetOwningPlayer())
 	{
-		FInputModeUIOnly InputMode;
-		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-		PlayerController->SetInputMode(InputMode);
-		PlayerController->bShowMouseCursor = true;
+		URPGDemoFunctionLibrary::ToggleInputMode(this, ERPGDemoInputMode::UIOnly);
 	}
 
 	if (GetWorld() && GetWorld()->GetNetMode() != NM_Standalone)

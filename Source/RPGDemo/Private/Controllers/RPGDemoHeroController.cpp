@@ -18,6 +18,11 @@
 #include "AbilitySystem/RPGDemoAbilitySystemComponent.h"
 #include "Components/UI/HeroUIComponent.h"
 #include "Widgets/RPGDemoWidgetBase.h"
+#include "DataAssets/Input/DataAsset_InputConfig.h"
+#include "EnhancedInputSubsystems.h"
+#include "Engine/LocalPlayer.h"
+#include "Input/RPGDemoLocalInput.h"
+#include "Items/Weapons/RPGDemoHeroWeapon.h"
 
 ARPGDemoHeroController::ARPGDemoHeroController()
 {
@@ -35,6 +40,7 @@ void ARPGDemoHeroController::BeginPlay()
 
 void ARPGDemoHeroController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    ClearPawnInputContexts();
     GetWorldTimerManager().ClearTimer(PresentationReadinessTimer);
     GetWorldTimerManager().ClearTimer(WaveMessageTimer);
     GetWorldTimerManager().ClearTimer(ResultPresentationTimer);
@@ -53,8 +59,81 @@ void ARPGDemoHeroController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void ARPGDemoHeroController::AcknowledgePossession(APawn* PossessedPawn)
 {
     Super::AcknowledgePossession(PossessedPawn);
+    SyncPawnInputContexts(PossessedPawn);
     RestoreGameplayInput();
     BindReplicatedPresentation();
+}
+
+void ARPGDemoHeroController::SetPawn(APawn* InPawn)
+{
+    if (InputContextPawn != InPawn) ClearPawnInputContexts();
+    Super::SetPawn(InPawn);
+    SyncPawnInputContexts(InPawn);
+}
+
+void ARPGDemoHeroController::OnRep_Pawn()
+{
+    if (InputContextPawn != GetPawn()) ClearPawnInputContexts();
+    Super::OnRep_Pawn();
+    SyncPawnInputContexts(GetPawn());
+}
+
+void ARPGDemoHeroController::OnUnPossess()
+{
+    ClearPawnInputContexts();
+    Super::OnUnPossess();
+}
+
+void ARPGDemoHeroController::ClearPawnInputContexts()
+{
+    // Cache the subsystem while possessed: a corpse no longer has a Controller.
+    if (UEnhancedInputLocalPlayerSubsystem* Input = InputContextSubsystem.Get())
+    {
+        if (AppliedWeaponMapping) Input->RemoveMappingContext(AppliedWeaponMapping);
+        if (AppliedBaseMapping) Input->RemoveMappingContext(AppliedBaseMapping);
+    }
+    AppliedWeaponMapping = nullptr;
+    AppliedBaseMapping = nullptr;
+    InputContextPawn.Reset();
+    InputContextSubsystem.Reset();
+}
+
+void ARPGDemoHeroController::ReleasePawnInputContexts(APawn* InPawn)
+{
+    // Late EndPlay/weapon callbacks from the old corpse cannot touch its successor.
+    if (InPawn && InputContextPawn == InPawn) ClearPawnInputContexts();
+}
+
+void ARPGDemoHeroController::SyncPawnInputContexts(APawn* InPawn)
+{
+    if (!IsLocalController() || !InPawn || InPawn != GetPawn() || InPawn->GetController() != this) return;
+    ARPGDemoHeroCharacter* Hero = Cast<ARPGDemoHeroCharacter>(InPawn);
+    if (!Hero || Hero->IsDeathPresentationActive())
+    {
+        ReleasePawnInputContexts(InPawn);
+        return;
+    }
+    ULocalPlayer* LocalPlayer = GetLocalPlayer();
+    UEnhancedInputLocalPlayerSubsystem* Input = LocalPlayer ? LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>() : nullptr;
+    const UDataAsset_InputConfig* Config = Hero->GetInputConfig();
+    if (!Input || !Config) return;
+    if (InputContextPawn != InPawn || InputContextSubsystem != Input) ClearPawnInputContexts();
+    InputContextPawn = InPawn;
+    InputContextSubsystem = Input;
+    ARPGDemoHeroWeapon* Weapon = Hero->GetHeroCombatComponent()->GetHeroCurrentEquippedWeapon();
+    UInputMappingContext* BaseMapping = Config->DefaultMappingContext;
+    UInputMappingContext* WeaponMapping = Weapon ? Weapon->HeroWeaponData.WeaponInputMappingContext : nullptr;
+    FModifyContextOptions Options;
+    Options.bIgnoreAllPressedKeysUntilRelease = true;
+    const auto SyncMapping = [Input, &Options](TObjectPtr<UInputMappingContext>& Applied, UInputMappingContext* Desired, int32 Priority)
+    {
+        if (Applied == Desired) return;
+        if (Applied) Input->RemoveMappingContext(Applied, Options);
+        Applied = Desired;
+        if (Applied) Input->AddMappingContext(Applied, Priority, Options);
+    };
+    SyncMapping(AppliedBaseMapping, BaseMapping, 0);
+    SyncMapping(AppliedWeaponMapping, WeaponMapping, 1);
 }
 
 void ARPGDemoHeroController::OnRep_PlayerState()
@@ -81,6 +160,7 @@ void ARPGDemoHeroController::BindReplicatedPresentation()
 
 void ARPGDemoHeroController::UpdatePresentationReadiness()
 {
+    SyncPawnInputContexts(GetPawn());
     BindReplicatedPresentation();
     UpdateCountdowns();
 }
@@ -291,8 +371,7 @@ void ARPGDemoHeroController::EnsureSurvivalMusic()
 void ARPGDemoHeroController::RestoreGameplayInput()
 {
     if (!IsLocalController()) return;
-    FInputModeGameOnly InputMode;
-    SetInputMode(InputMode);
+    RPGDemoLocalInput::SetInputMode(this, ERPGDemoInputMode::GameOnly, false);
     bShowMouseCursor = false;
     ResetIgnoreMoveInput();
     ResetIgnoreLookInput();

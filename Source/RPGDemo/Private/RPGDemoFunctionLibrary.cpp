@@ -13,6 +13,8 @@
 #include "RPGDemoGameInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "SaveGame/RPGDemoSaveGame.h"
+#include "Blueprint/UserWidget.h"
+#include "Input/RPGDemoLocalInput.h"
 
 URPGDemoAbilitySystemComponent* URPGDemoFunctionLibrary::NativeGetRPGDemoASCFromActor(AActor* InActor)
 {
@@ -233,9 +235,11 @@ URPGDemoGameInstance* URPGDemoFunctionLibrary::GetRPGDemoGameInstance(const UObj
 
 void URPGDemoFunctionLibrary::ToggleInputMode(const UObject* WorldContextObject, ERPGDemoInputMode InInputMode)
 {
-	APlayerController* PlayerController = nullptr;
+	APlayerController* PlayerController = const_cast<APlayerController*>(Cast<APlayerController>(WorldContextObject));
+	if (const UUserWidget* Widget = Cast<UUserWidget>(WorldContextObject)) PlayerController = Widget->GetOwningPlayer();
+	if (const APawn* Pawn = Cast<APawn>(WorldContextObject)) PlayerController = Cast<APlayerController>(Pawn->GetController());
 
-	if (GEngine)
+	if (!PlayerController && GEngine)
 	{
 		if (UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull))
 		{
@@ -243,23 +247,17 @@ void URPGDemoFunctionLibrary::ToggleInputMode(const UObject* WorldContextObject,
 		}
 	}
 
-	if (!PlayerController)
+	if (!PlayerController || !PlayerController->IsLocalController())
 	{
 		return;
 	}
-
-	FInputModeGameOnly GameOnlyMode;
-	FInputModeUIOnly UIOnlyMode;
-	FInputModeGameAndUI GameAndUIMode;
-	GameAndUIMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-	GameAndUIMode.SetHideCursorDuringCapture(false);
 
 	const bool bNetworkedWorld = PlayerController->GetNetMode() != NM_Standalone;
 
 	switch (InInputMode)
 	{
 		case ERPGDemoInputMode::GameOnly:
-			PlayerController->SetInputMode(GameOnlyMode);
+			RPGDemoLocalInput::SetInputMode(PlayerController, InInputMode, true);
 			PlayerController->bShowMouseCursor = false;
 			PlayerController->ResetIgnoreMoveInput();
 			PlayerController->ResetIgnoreLookInput();
@@ -285,7 +283,7 @@ void URPGDemoFunctionLibrary::ToggleInputMode(const UObject* WorldContextObject,
 				// pause menu exclusive routing and makes an already-open menu
 				// unclickable. GameAndUI keeps both viewports interactive while the
 				// controlled pawn is disabled locally.
-				PlayerController->SetInputMode(GameAndUIMode);
+				RPGDemoLocalInput::SetInputMode(PlayerController, InInputMode, true);
 				PlayerController->SetIgnoreMoveInput(true);
 				PlayerController->SetIgnoreLookInput(true);
 				if (APawn* ControlledPawn = PlayerController->GetPawn())
@@ -295,7 +293,7 @@ void URPGDemoFunctionLibrary::ToggleInputMode(const UObject* WorldContextObject,
 			}
 			else
 			{
-				PlayerController->SetInputMode(UIOnlyMode);
+				RPGDemoLocalInput::SetInputMode(PlayerController, InInputMode, true);
 			}
 			PlayerController->bShowMouseCursor = true;
 			break;

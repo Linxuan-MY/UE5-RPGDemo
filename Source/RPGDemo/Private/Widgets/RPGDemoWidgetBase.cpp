@@ -9,6 +9,8 @@
 #include "AbilitySystem/RPGDemoAttributeSet.h"
 #include "Components/UI/HeroUIComponent.h"
 #include "Components/UI/EnemyUIComponent.h"
+#include "Input/RPGDemoLocalInput.h"
+#include "RPGDemoFunctionLibrary.h"
 
 TArray<TWeakObjectPtr<URPGDemoWidgetBase>> URPGDemoWidgetBase::MenuLayerStack;
 
@@ -96,13 +98,12 @@ void URPGDemoWidgetBase::NativeConstruct()
 	{
 		if (APlayerController* PlayerController = GetOwningPlayer())
 		{
-			FInputModeUIOnly InputMode;
-			if (IsFocusable()) { InputMode.SetWidgetToFocus(TakeWidget()); }
-			PlayerController->SetInputMode(InputMode);
+			URPGDemoFunctionLibrary::ToggleInputMode(this, ERPGDemoInputMode::UIOnly);
+			RPGDemoLocalInput::SetInputMode(PlayerController, ERPGDemoInputMode::UIOnly, true, IsFocusable() ? TakeWidget() : TSharedPtr<SWidget>());
 			PlayerController->bShowMouseCursor = true;
 		}
 
-		if (IsFocusable()) { SetFocus(); }
+		if (IsFocusable() && RPGDemoLocalInput::OwnsActiveViewport(GetOwningPlayer())) { SetFocus(); }
 	}
 }
 
@@ -121,13 +122,13 @@ void URPGDemoWidgetBase::NativeDestruct()
 				PreviousWidget && PreviousWidget->GetOwningLocalPlayer() == OwningLocalPlayer)
 			{
 				PreviousWidget->SetVisibility(ESlateVisibility::Visible);
-				if (PreviousWidget->IsFocusable()) { PreviousWidget->SetFocus(); }
+				if (PreviousWidget->IsFocusable() && RPGDemoLocalInput::OwnsActiveViewport(PreviousWidget->GetOwningPlayer())) { PreviousWidget->SetFocus(); }
 
 				if (APlayerController* PlayerController = PreviousWidget->GetOwningPlayer())
 				{
-					FInputModeUIOnly InputMode;
-					if (PreviousWidget->IsFocusable()) { InputMode.SetWidgetToFocus(PreviousWidget->TakeWidget()); }
-					PlayerController->SetInputMode(InputMode);
+					URPGDemoFunctionLibrary::ToggleInputMode(PreviousWidget, ERPGDemoInputMode::UIOnly);
+					RPGDemoLocalInput::SetInputMode(PlayerController, ERPGDemoInputMode::UIOnly, true,
+						PreviousWidget->IsFocusable() ? PreviousWidget->TakeWidget() : TSharedPtr<SWidget>());
 					PlayerController->bShowMouseCursor = true;
 				}
 

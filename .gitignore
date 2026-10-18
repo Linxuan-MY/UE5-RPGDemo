@@ -22,6 +22,10 @@
 /TestResults/
 /CodeCoverage/
 
+# Temporary workspace files and personal scratch material
+/[Tt]mp/
+/[Tt]emp/
+
 # Unreal generated project files
 *.sln
 *.slnx

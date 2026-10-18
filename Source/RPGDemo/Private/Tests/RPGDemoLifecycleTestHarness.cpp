@@ -43,9 +43,47 @@
 #include "RPGDemoGameplayTags.h"
 #include "TimerManager.h"
 #include "UnrealClient.h"
+#include "DataAssets/Input/DataAsset_InputConfig.h"
+#include "Engine/GameViewportClient.h"
+#include "InputKeyEventArgs.h"
+#include "InputMappingContext.h"
+#include "Tests/InputTestKeys.h"
 
 namespace
 {
+    bool ActivateTestAbility(ARPGDemoHeroCharacter* Hero, FGameplayAbilitySpec* Spec)
+    {
+        auto* ASC = Hero ? Hero->GetRPGDemoAbilitySystemComponent() : nullptr;
+        if (!ASC || !Spec) return false;
+        if (!FParse::Param(FCommandLine::Get(), TEXT("RPGDemoLifecycleKeyInput"))) return ASC->TryActivateAbility(Spec->Handle);
+        if (Spec->IsActive()) return true;
+        auto* PC = Hero->GetController<APlayerController>();
+        for (FGameplayTag Tag : Spec->GetDynamicSpecSourceTags())
+        {
+            const TArray<FKey> Keys = RPGDemoInputTest::ResolveKeys(Hero, Tag);
+            if (Keys.IsEmpty()) continue;
+            for (FKey Key : Keys) RPGDemoInputTest::SendKey(PC, Key, IE_Pressed);
+            FTimerHandle Release;
+            Hero->GetWorldTimerManager().SetTimer(Release, FTimerDelegate::CreateWeakLambda(PC, [PC, Keys]()
+            {
+                for (int32 Index = Keys.Num() - 1; Index >= 0; --Index) RPGDemoInputTest::SendKey(PC, Keys[Index], IE_Released);
+            }), 0.12f, false);
+            UE_LOG(LogRPGDemoCombat, Log, TEXT("LIFECYCLE KEY keys=%d primary=%s ability=%s pawn=%s"),
+                Keys.Num(), *Keys.Last().ToString(), *Spec->Ability->GetName(), *Hero->GetName());
+            return false; // Observe activation on the next tick; never activate ASC directly.
+        }
+        return false;
+    }
+
+    bool ActivateTestAbilityByTag(ARPGDemoHeroCharacter* Hero, FGameplayTag Tag)
+    {
+        auto* ASC = Hero ? Hero->GetRPGDemoAbilitySystemComponent() : nullptr;
+        if (!ASC) return false;
+        if (!FParse::Param(FCommandLine::Get(), TEXT("RPGDemoLifecycleKeyInput"))) return ASC->TryActivateAbilityByTag(Tag);
+        for (auto& Spec : ASC->GetActivatableAbilities())
+            if (Spec.Ability && Spec.Ability->GetAssetTags().HasTag(Tag)) return ActivateTestAbility(Hero, &Spec);
+        return false;
+    }
     int32 LifecycleMatchesStarted = 0;
     int32 LifecycleMatchesCompleted = 0;
     int32 LifecycleServerFailures = 0;
@@ -465,7 +503,7 @@ void ARPGDemoLifecycleTestHarness::TickClient()
         {
             if (bDone || Elapsed < Earliest || Elapsed < NextAttempt) return;
             NextAttempt = Elapsed + 0.25;
-            const bool bActivated = ASC->TryActivateAbilityByTag(Tag);
+            const bool bActivated = ActivateTestAbilityByTag(Hero, Tag);
             if (bActivated || Elapsed >= Deadline)
             { Check(bActivated, Case, PlayerRole); bDone = true; }
         };
@@ -499,7 +537,7 @@ void ARPGDemoLifecycleTestHarness::TickClient()
                 const auto& Ability = Weapon->HeroWeaponData.SpecialWeaponAbilities[ClientSpecialIndex];
                 const bool bOnCooldown = ASC->HasMatchingGameplayTag(Ability.AbilityCooldownTag);
                 const FGameplayAbilitySpec* Spec = ASC->FindAbilitySpecFromClass(Ability.AbilityToGrant);
-                const bool bPassed = Spec && (bOnCooldown || ASC->TryActivateAbility(Spec->Handle));
+                const bool bPassed = Spec && (bOnCooldown || ActivateTestAbility(Hero, ASC->FindAbilitySpecFromHandle(Spec->Handle)));
                 if (bPassed || Elapsed >= 18.0)
                 {
                     Check(bPassed, bOnCooldown ? TEXT("WeaponCooldownPreserved") : TEXT("OwnerSpecial"), PlayerRole);
@@ -515,7 +553,7 @@ void ARPGDemoLifecycleTestHarness::TickClient()
         if (!bWeaponDamageObserved && Elapsed >= NextCombatRetry && Hero->GetDistanceTo(Fixture) < 240.f)
         {
             NextCombatRetry = Elapsed + 2.0;
-            ASC->TryActivateAbilityByTag(RPGDemoGameplayTags::Player_Ability_LightAttack_Axe);
+            ActivateTestAbilityByTag(Hero, RPGDemoGameplayTags::Player_Ability_LightAttack_Axe);
         }
     }
     if (Phase == 2 && Corpse)

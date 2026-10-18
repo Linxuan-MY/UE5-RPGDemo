@@ -7,7 +7,6 @@
 #include "HeroCombatComponent.generated.h"
 
 class ARPGDemoHeroWeapon;
-class UInputMappingContext;
 class UAnimInstance;
 
 /**
@@ -35,6 +34,5 @@ public:
     virtual void RefreshEquippedWeaponPresentation() override;
 private:
     TWeakObjectPtr<ARPGDemoHeroWeapon> PresentedWeapon;
-    UPROPERTY(Transient) TObjectPtr<UInputMappingContext> AppliedWeaponMapping;
     UPROPERTY(Transient) TSubclassOf<UAnimInstance> AppliedWeaponAnimLayer;
 };

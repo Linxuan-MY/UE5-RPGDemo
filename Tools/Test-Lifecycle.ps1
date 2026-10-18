@@ -8,7 +8,8 @@ param(
     [string]$ServerExecutable,
     [string]$ClientExecutable,
     [switch]$Screenshots,
-    [switch]$RespawnRegression
+    [switch]$RespawnRegression,
+    [switch]$KeyInput
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -23,6 +24,7 @@ $runRoot = Join-Path $projectRoot ("Saved\Automation\Lifecycle\{0}-{1}clients-la
 New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 $shared = @('-log', '-unattended', '-NoSplash', '-RPGDemoLifecycleTest', "-RPGDemoLifecycleClients=$Clients", '-RPGDemoCombatTestTimeout=240')
 if ($RespawnRegression) { $shared += '-RPGDemoRespawnRegression' }
+if ($KeyInput) { $shared += '-RPGDemoLifecycleKeyInput' }
 $render = '-ExecCmds="rpgdemo.Combat.Debug 1,sg.ViewDistanceQuality 1,sg.ShadowQuality 0,sg.PostProcessQuality 0,sg.TextureQuality 1,sg.EffectsQuality 0,sg.FoliageQuality 0,r.Streaming.PoolSize 512,r.ScreenPercentage 70,t.MaxFPS 30"'
 $network = @("-PktLag=$PacketLag", "-PktLoss=$PacketLoss")
 $serverArgs = @('/Game/Maps/MultiplayerLobbyMap?game=/Script/RPGDemo.RPGDemoLobbyGameMode', '-server', '-nullrhi', '-multihome=127.0.0.1', '-ExecCmds="rpgdemo.Combat.Debug 1"', "-port=$Port", ('-abslog="' + (Join-Path $runRoot 'Server.log') + '"')) + $shared + $network

@@ -11,7 +11,6 @@
 #include "Components/UI/HeroUIComponent.h"
 #include "DataAssets/Input/DataAsset_InputConfig.h"
 #include "DataAssets/StartUpData/DataAsset_HeroStartUpData.h"
-#include "EnhancedInputSubsystems.h"
 #include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -136,13 +135,10 @@ void ARPGDemoHeroCharacter::ClientConfirmMeleeHit_Implementation(uint32 Sequence
 
 void ARPGDemoHeroCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
+    Super::SetupPlayerInputComponent(PlayerInputComponent);
     checkf(InputConfigDataAsset, TEXT("Forgot to assign a valid data asset as input config"));
-    APlayerController* PlayerController = GetController<APlayerController>();
-    ULocalPlayer* LocalPlayer = PlayerController ? PlayerController->GetLocalPlayer() : nullptr;
-    UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer
-        ? ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer) : nullptr;
-    if (!Subsystem) return;
-    Subsystem->AddMappingContext(InputConfigDataAsset->DefaultMappingContext, 0);
+    LocalInputController = GetController<ARPGDemoHeroController>();
+    if (ARPGDemoHeroController* PC = LocalInputController.Get()) PC->SyncPawnInputContexts(this);
     URPGDemoInputComponent* Input = CastChecked<URPGDemoInputComponent>(PlayerInputComponent);
     Input->BindNativeInputAction(InputConfigDataAsset, RPGDemoGameplayTags::InputTag_Move, ETriggerEvent::Triggered, this, &ThisClass::Input_Move);
     Input->BindNativeInputAction(InputConfigDataAsset, RPGDemoGameplayTags::InputTag_Look, ETriggerEvent::Triggered, this, &ThisClass::Input_Look);
@@ -179,9 +175,16 @@ void ARPGDemoHeroCharacter::RefreshStoneInteraction()
 
 void ARPGDemoHeroCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    if (ARPGDemoHeroController* PC = LocalInputController.Get()) PC->ReleasePawnInputContexts(this);
     GetWorldTimerManager().ClearTimer(LocalPresentationTimer);
     HeroUIComponent->OnStoneInteracted.Broadcast(false);
     Super::EndPlay(EndPlayReason);
+}
+
+void ARPGDemoHeroCharacter::UnPossessed()
+{
+    if (ARPGDemoHeroController* PC = LocalInputController.Get()) PC->ReleasePawnInputContexts(this);
+    Super::UnPossessed();
 }
 
 void ARPGDemoHeroCharacter::Input_Move(const FInputActionValue& Value)

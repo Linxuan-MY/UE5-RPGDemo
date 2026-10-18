@@ -12,6 +12,8 @@
 class UAudioComponent;
 class URPGDemoWidgetBase;
 class UUserWidget;
+class UEnhancedInputLocalPlayerSubsystem;
+class UInputMappingContext;
 
 UCLASS()
 class RPGDEMO_API ARPGDemoHeroController : public APlayerController, public IGenericTeamAgentInterface
@@ -21,6 +23,9 @@ class RPGDEMO_API ARPGDemoHeroController : public APlayerController, public IGen
 public:
     ARPGDemoHeroController();
     virtual void AcknowledgePossession(APawn* PossessedPawn) override;
+    virtual void SetPawn(APawn* InPawn) override;
+    void SyncPawnInputContexts(APawn* InPawn);
+    void ReleasePawnInputContexts(APawn* InPawn);
     virtual FGenericTeamId GetGenericTeamId() const override;
     UFUNCTION(BlueprintCallable, Category = "RPGDemo|UI") void EnsureHeroHUD();
 
@@ -48,6 +53,8 @@ public:
 protected:
     virtual void BeginPlay() override;
     virtual void OnRep_PlayerState() override;
+    virtual void OnRep_Pawn() override;
+    virtual void OnUnPossess() override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     UPROPERTY(EditDefaultsOnly, Category = "RPGDemo|UI") TSubclassOf<URPGDemoWidgetBase> HeroHUDClass;
     UPROPERTY(EditDefaultsOnly, Category = "RPGDemo|UI") TSubclassOf<UUserWidget> CountdownWidgetClass;
@@ -55,6 +62,11 @@ protected:
 
 private:
     void RestoreGameplayInput();
+    void ClearPawnInputContexts();
+    TWeakObjectPtr<APawn> InputContextPawn;
+    TWeakObjectPtr<UEnhancedInputLocalPlayerSubsystem> InputContextSubsystem;
+    UPROPERTY(Transient) TObjectPtr<UInputMappingContext> AppliedBaseMapping;
+    UPROPERTY(Transient) TObjectPtr<UInputMappingContext> AppliedWeaponMapping;
     void BindReplicatedPresentation();
     void EnsureSurvivalMusic();
     void UpdatePresentationReadiness();
